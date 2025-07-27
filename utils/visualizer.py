@@ -222,12 +222,12 @@ class ReportVisualizer:
         
         return fig
     
-    def create_score_breakdown(self, score_data: Dict[str, float]) -> Optional[Any]:
+    def create_ai_score_breakdown(self, score_data: Dict[str, float]) -> Optional[Any]:
         """
-        Create a breakdown of how the final score was calculated.
+        Create a breakdown of AI analysis components.
         
         Args:
-            score_data (Dict[str, float]): Score components
+            score_data (Dict[str, float]): AI score components
             
         Returns:
             Optional[Any]: Plotly figure object or None if not available
@@ -235,25 +235,27 @@ class ReportVisualizer:
         if not PLOTLY_AVAILABLE:
             return None
         
-        # Extract score components
-        cosine = score_data.get('cosine_contribution', 0) * 100
-        keyword = score_data.get('keyword_contribution', 0) * 100
-        jaccard = score_data.get('jaccard_contribution', 0) * 100
+        # Extract AI score components
+        technical = score_data.get('technical_skills_score', 0)
+        experience = score_data.get('experience_score', 0)
+        education = score_data.get('education_score', 0)
+        soft_skills = score_data.get('soft_skills_score', 0)
+        ats_score = score_data.get('ats_score', 0)
         
         fig = go.Figure(data=[
             go.Bar(
-                x=['Cosine Similarity (40%)', 'Keyword Match (40%)', 'Jaccard Similarity (20%)'],
-                y=[cosine, keyword, jaccard],
-                text=[f'{cosine:.1f}%', f'{keyword:.1f}%', f'{jaccard:.1f}%'],
+                x=['Technical Skills', 'Experience', 'Education', 'Soft Skills', 'ATS Optimization'],
+                y=[technical, experience, education, soft_skills, ats_score],
+                text=[f'{technical:.1f}%', f'{experience:.1f}%', f'{education:.1f}%', f'{soft_skills:.1f}%', f'{ats_score:.1f}%'],
                 textposition='auto',
-                marker_color=['lightblue', 'lightgreen', 'lightcoral']
+                marker_color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
             )
         ])
         
         fig.update_layout(
-            title="Score Breakdown",
-            xaxis_title="Components",
-            yaxis_title="Contribution (%)",
+            title="AI Analysis Score Breakdown",
+            xaxis_title="Analysis Components",
+            yaxis_title="Score (%)",
             height=400
         )
         
@@ -292,58 +294,65 @@ class ReportVisualizer:
             logger.warning(f"Failed to create word cloud: {e}")
             return None
     
-    def generate_text_report(self, analysis_results: Dict[str, Any]) -> str:
+    def generate_ai_text_report(self, analysis_results: Dict[str, Any]) -> str:
         """
-        Generate a comprehensive text report.
+        Generate a comprehensive AI analysis text report.
         
         Args:
-            analysis_results (Dict[str, Any]): Complete analysis results
+            analysis_results (Dict[str, Any]): Complete AI analysis results
             
         Returns:
             str: Formatted text report
         """
-        final_score = analysis_results.get('final_percentage', 0)
-        keyword_analysis = analysis_results.get('keyword_analysis', {})
+        ai_analysis = analysis_results.get('ai_analysis', {})
+        match_score = ai_analysis.get('ai_match_score', {})
+        skill_gap = ai_analysis.get('skill_gap_analysis', {})
+        salary_est = ai_analysis.get('salary_estimation', {})
+        
+        overall_score = match_score.get('overall_score', 0)
         
         report = f"""
-🎯 RESUME ANALYSIS REPORT
-========================
+🤖 AI RESUME ANALYSIS REPORT
+===========================
 
-📊 OVERALL MATCH SCORE: {final_score:.1f}%
+📊 OVERALL AI MATCH SCORE: {overall_score:.1f}%
 
-🔍 DETAILED BREAKDOWN:
-- Cosine Similarity: {analysis_results.get('cosine_similarity', 0)*100:.1f}%
-- Keyword Match: {keyword_analysis.get('keyword_match_score', 0)*100:.1f}%
-- Jaccard Similarity: {analysis_results.get('jaccard_similarity', 0)*100:.1f}%
+🔍 DETAILED AI BREAKDOWN:
+- Technical Skills: {match_score.get('technical_skills_score', 0):.1f}%
+- Experience Level: {match_score.get('experience_score', 0):.1f}%
+- Education Match: {match_score.get('education_score', 0):.1f}%
+- Soft Skills: {match_score.get('soft_skills_score', 0):.1f}%
+- ATS Optimization: {match_score.get('ats_score', 0):.1f}%
 
-✅ MATCHING KEYWORDS ({keyword_analysis.get('common_count', 0)} found):
+❌ SKILL GAP ANALYSIS:
 """
         
-        # Add common keywords
-        common_keywords = keyword_analysis.get('common_keywords', [])
-        if common_keywords:
-            for keyword in common_keywords[:10]:  # Show top 10
-                report += f"   • {keyword}\n"
+        # Add missing skills
+        missing_skills = skill_gap.get('missing_skills', [])
+        if missing_skills:
+            report += f"Missing Skills ({len(missing_skills)} identified):\n"
+            for skill in missing_skills[:10]:
+                report += f"   • {skill}\n"
         else:
-            report += "   • No matching keywords found\n"
+            report += "   • No critical skills missing\n"
         
-        report += f"\n❌ MISSING KEYWORDS ({keyword_analysis.get('missing_count', 0)} total):\n"
+        # Add priority skills
+        priority_skills = skill_gap.get('priority_skills', [])
+        if priority_skills:
+            report += f"\n🎯 PRIORITY SKILLS TO DEVELOP:\n"
+            for skill in priority_skills[:5]:
+                report += f"   • {skill}\n"
         
-        # Add missing keywords
-        missing_keywords = keyword_analysis.get('missing_keywords', [])
-        if missing_keywords:
-            for keyword in missing_keywords[:10]:  # Show top 10
-                report += f"   • {keyword}\n"
-        else:
-            report += "   • No missing keywords identified\n"
-        
-        # Add insights
-        if 'insights' in analysis_results:
-            report += "\n💡 INSIGHTS & RECOMMENDATIONS:\n"
-            for insight in analysis_results['insights']:
-                report += f"   {insight}\n"
-        
-        report += f"\n📈 KEYWORD COVERAGE: {keyword_analysis.get('coverage_percentage', 0):.1f}%"
+        # Add salary information
+        if salary_est:
+            min_sal = salary_est.get('estimated_range_min', 0)
+            max_sal = salary_est.get('estimated_range_max', 0)
+            avg_sal = salary_est.get('market_average', 0)
+            
+            if min_sal and max_sal:
+                report += f"\n💰 ESTIMATED SALARY RANGE: ${min_sal:,} - ${max_sal:,}"
+                if avg_sal:
+                    report += f"\n📈 MARKET AVERAGE: ${avg_sal:,}"
         
         return report
     
@@ -366,59 +375,71 @@ class ReportVisualizer:
             logger.error(f"Failed to save JSON report: {e}")
             return False
     
-    def display_streamlit_report(self, analysis_results: Dict[str, Any]) -> None:
+    def display_ai_streamlit_report(self, analysis_results: Dict[str, Any]) -> None:
         """
-        Display interactive report in Streamlit.
+        Display interactive AI analysis report in Streamlit.
         
         Args:
-            analysis_results (Dict[str, Any]): Analysis results
+            analysis_results (Dict[str, Any]): AI analysis results
         """
         if not STREAMLIT_AVAILABLE:
             logger.warning("Streamlit not available for interactive report")
             return
         
-        st.title("🎯 Resume Analysis Report")
+        st.title("🤖 AI Resume Analysis Report")
+        
+        # Extract AI analysis data
+        ai_analysis = analysis_results.get('ai_analysis', {})
+        match_score = ai_analysis.get('ai_match_score', {})
+        skill_gap = ai_analysis.get('skill_gap_analysis', {})
         
         # Main score display
-        final_score = analysis_results.get('final_percentage', 0)
+        overall_score = match_score.get('overall_score', 0)
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Overall Match", f"{final_score:.1f}%")
+            st.metric("🎯 AI Match Score", f"{overall_score:.1f}%")
         
         with col2:
-            keyword_analysis = analysis_results.get('keyword_analysis', {})
-            st.metric("Keywords Found", keyword_analysis.get('common_count', 0))
+            missing_skills = skill_gap.get('missing_skills', [])
+            st.metric("❌ Missing Skills", len(missing_skills))
         
         with col3:
-            st.metric("Keywords Missing", keyword_analysis.get('missing_count', 0))
+            ats_score = match_score.get('ats_score', 0)
+            st.metric("🔍 ATS Score", f"{ats_score:.1f}%")
         
-        # Score gauge
-        gauge_fig = self.create_score_gauge(final_score / 100)
+        # AI Score gauge
+        gauge_fig = self.create_score_gauge(overall_score / 100, "AI Match Score")
         if gauge_fig:
             st.plotly_chart(gauge_fig, use_container_width=True)
         
-        # Keyword analysis
-        st.subheader("🔍 Keyword Analysis")
-        keyword_fig = self.create_keyword_comparison(
-            keyword_analysis.get('common_keywords', []),
-            keyword_analysis.get('missing_keywords', [])
-        )
-        if keyword_fig:
-            st.plotly_chart(keyword_fig, use_container_width=True)
-        
-        # Score breakdown
-        st.subheader("📊 Score Breakdown")
-        breakdown_fig = self.create_score_breakdown(
-            analysis_results.get('score_breakdown', {})
-        )
+        # AI Score breakdown
+        st.subheader("� AI Analysis Breakdown")
+        breakdown_fig = self.create_ai_score_breakdown(match_score)
         if breakdown_fig:
             st.plotly_chart(breakdown_fig, use_container_width=True)
         
-        # Text report
-        st.subheader("📝 Detailed Report")
-        text_report = self.generate_text_report(analysis_results)
-        st.text(text_report)
+        # Skill gap analysis
+        if missing_skills:
+            st.subheader("🎯 Skill Gap Analysis")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Missing Skills:**")
+                for skill in missing_skills[:10]:
+                    st.markdown(f"• {skill}")
+            
+            with col2:
+                priority_skills = skill_gap.get('priority_skills', [])
+                if priority_skills:
+                    st.markdown("**Priority Skills:**")
+                    for skill in priority_skills[:5]:
+                        st.markdown(f"• {skill}")
+        
+        # AI Text report
+        st.subheader("📝 Detailed AI Analysis")
+        ai_report = self.generate_ai_text_report(analysis_results)
+        st.text(ai_report)
     
     def get_available_features(self) -> Dict[str, bool]:
         """Get information about available visualization features."""

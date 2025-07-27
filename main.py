@@ -24,7 +24,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from utils.text_extractor import TextExtractor
-from utils.text_processor import TextProcessor
 from utils.visualizer import ReportVisualizer
 from utils.ai_analyzer import AdvancedAIAnalyzer, AnalysisConfig
 
@@ -37,7 +36,6 @@ class AIResumeAnalyzer:
     def __init__(self):
         """Initialize the AI-powered analyzer."""
         self.text_extractor = TextExtractor()
-        self.text_processor = TextProcessor()
         self.visualizer = ReportVisualizer()
         
         # Initialize AI analyzer

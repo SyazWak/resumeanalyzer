@@ -2,7 +2,7 @@
 
 An intelligent resume analysis system powered by DeepSeek AI that provides comprehensive insights for job applications.
 
-## ✨ Features
+### ✨ Features
 
 ### 🎯 AI-Powered Analysis with DeepSeek
 - **Smart Match Scoring**: AI-driven compatibility assessment with detailed breakdown
@@ -12,16 +12,10 @@ An intelligent resume analysis system powered by DeepSeek AI that provides compr
 - **Personalized Feedback**: Detailed improvement suggestions and next steps
 - **Market Insights**: Industry trends and competitive analysis
 
-### 📊 Enhanced Analysis
-- **TF-IDF Similarity**: Term frequency analysis for keyword matching
-- **Skills Extraction**: Automated identification of technical and soft skills
-- **Text Statistics**: Comprehensive document analysis and insights
-- **Visual Reports**: Interactive charts and visualizations
-
-### 🌐 Dual Interface Options
+### 🌐 Interface Options
 - **Command Line Interface**: Batch processing with AI analysis
 - **Web Interface**: Interactive Streamlit dashboard with AI-powered insights
-- **Flexible Input**: Upload PDFs/TXT files or paste text directly
+- **Flexible Input**: Upload PDFs/TXT/DOCX files or paste text directly
 
 ## 🚀 Quick Start
 
@@ -54,46 +48,37 @@ Get your OpenRouter API key from: https://openrouter.ai/keys
 
 ### 3. Run Analysis
 
-#### 🖥️ Command Line (AI-Enhanced)
+#### 🖥️ Command Line (AI Analysis)
 ```bash
 # Basic AI analysis
-python main_ai.py --resume examples/waiz_resume.txt --job_description examples/junior_dev_job.txt
+python main.py --resume examples/waiz_resume.txt --job_description examples/junior_dev_job.txt
 
 # With location and industry context
-python main_ai.py --resume resume.pdf --job_description job.txt --location "San Francisco, CA" --industry "Technology"
-
-# Traditional analysis only
-python main_ai.py --resume resume.txt --job_description job.txt --traditional-only
+python main.py --resume resume.pdf --job_description job.txt --location "San Francisco, CA" --industry "Technology"
 ```
 
-#### 🌐 Web Interface (AI-Enhanced)
+#### 🌐 Web Interface (AI-Powered)
 ```bash
-# Start AI-enhanced web app
-streamlit run streamlit_app_ai.py
+# Start AI-powered web app
+streamlit run app.py
 
-# Or use VS Code task: "Start AI-Enhanced Streamlit App"
+# Or use VS Code task: "Start AI Resume Analyzer Web App"
 ```
 
 #### 🔧 VS Code Integration
 Use the built-in tasks:
-- `Run AI-Enhanced CLI Analyzer` - CLI analysis with AI
-- `Start AI-Enhanced Streamlit App` - Web interface with AI
-- `Run Resume Analyzer CLI` - Traditional CLI analysis
-- `Start Streamlit Web App` - Traditional web interface
+- `Run AI Resume Analyzer CLI` - CLI analysis with AI
+- `Start AI Resume Analyzer Web App` - Web interface with AI
 
 ## 📁 Project Structure
 
 ```
 resumeanalyzer/
-├── main_ai.py                 # AI-enhanced CLI application
-├── streamlit_app_ai.py        # AI-enhanced web interface
-├── main.py                    # Traditional CLI application
-├── streamlit_app.py           # Traditional web interface
+├── main.py                    # AI-powered CLI application
+├── app.py                     # AI-powered web interface  
 ├── utils/
 │   ├── ai_analyzer.py         # 🤖 Advanced AI analysis engine
-│   ├── text_extractor.py      # PDF/TXT text extraction
-│   ├── text_processor.py      # NLP text processing
-│   ├── similarity.py          # Similarity calculations
+│   ├── text_extractor.py      # PDF/TXT/DOCX text extraction
 │   └── visualizer.py          # Chart and report generation
 ├── examples/
 │   ├── waiz_resume.txt        # Sample resume
@@ -189,14 +174,8 @@ Options:
 - **Multi-Dimensional Scoring**: Technical skills, experience, education, soft skills, ATS
 - **Actionable Insights**: Specific recommendations with priority ranking
 
-### Traditional NLP
-- **spaCy Processing**: Advanced text processing and entity recognition
-- **TF-IDF Vectorization**: Statistical text similarity analysis
-- **Skill Extraction**: Automated identification of technical and soft skills
-- **Keyword Matching**: Comprehensive keyword overlap analysis
-
 ### File Processing
-- **Multi-Format Support**: PDF and TXT file processing
+- **Multi-Format Support**: PDF, TXT, and DOCX file processing
 - **Robust Extraction**: Multiple extraction methods with fallbacks
 - **Text Cleaning**: Advanced preprocessing for better analysis
 - **Error Handling**: Graceful handling of corrupted or unreadable files
@@ -204,9 +183,9 @@ Options:
 ## 🔍 Example Analysis
 
 ### Traditional vs AI Comparison
-- **Traditional Score**: 45.2% (TF-IDF similarity)
+- **Traditional Score**: Not applicable (removed traditional analysis)
 - **AI Score**: 78.5% (Comprehensive AI analysis)
-- **Improvement**: +33.3% more accurate assessment
+- **Improvement**: Pure AI-driven assessment with detailed insights
 
 ### Sample AI Insights
 - **Missing Skills**: React, AWS, Docker, Kubernetes
@@ -267,10 +246,10 @@ results = analyzer.analyze_with_config(resume_text, job_text, config)
 ### Debug Mode
 ```bash
 # Enable verbose output
-python main_ai.py --resume resume.pdf --job_description job.txt --verbose
+python main.py --resume resume.pdf --job_description job.txt --verbose
 
 # Check analysis logs
-streamlit run streamlit_app_ai.py --logger.level=debug
+streamlit run app.py --logger.level=debug
 ```
 
 ## 🤝 Contributing
@@ -289,9 +268,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **DeepSeek AI** for advanced language model capabilities
 - **OpenRouter** for API infrastructure
-- **spaCy** for NLP processing
+- **spaCy** for minimal NLP processing
 - **Streamlit** for web interface framework
-- **scikit-learn** for machine learning utilities
 
 ## 📞 Support
 
