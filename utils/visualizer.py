@@ -4,6 +4,9 @@ Report Visualizer Module
 
 Creates visualizations and reports for resume analysis results.
 Supports both static plots and interactive Streamlit components.
+
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
 """
 
 import logging

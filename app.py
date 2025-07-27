@@ -3,6 +3,9 @@ AI-Enhanced Resume Analyzer - Streamlit Web Application
 =======================================================
 
 Advanced web interface for intelligent resume analysis with AI-powered insights.
+
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
 """
 
 import streamlit as st

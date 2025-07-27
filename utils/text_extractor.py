@@ -4,6 +4,9 @@ Text Extractor Module
 
 Handles extraction of text content from various file formats including PDF and TXT files.
 Supports multiple PDF libraries for robust text extraction.
+
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
 """
 
 import os

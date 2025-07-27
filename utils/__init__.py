@@ -7,6 +7,9 @@ This package contains utility modules for:
 - AI-powered analysis with DeepSeek
 - Data visualization and reporting
 
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
+
 Modules:
 --------
 - text_extractor: Extract text from various file formats

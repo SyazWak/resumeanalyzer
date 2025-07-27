@@ -112,7 +112,13 @@ Options:
 - Ensure virtual environment is activated
 - Check Python version (3.8+ required)
 
-## 🙏 Acknowledgments
+## � License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 SyazWak
+
+## �🙏 Acknowledgments
 
 - **DeepSeek AI** for language model capabilities
 - **OpenRouter** for API infrastructure

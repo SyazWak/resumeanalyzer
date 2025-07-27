@@ -6,6 +6,9 @@ AI Resume Analyzer - Main CLI Application
 AI-powered command-line interface for resume analysis using DeepSeek.
 Provides intelligent insights and recommendations.
 
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
+
 Usage:
     python main.py --resume path/to/resume.pdf --job_description path/to/job_desc.txt
     python main.py --resume resume.txt --job_description job.txt

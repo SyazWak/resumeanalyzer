@@ -5,6 +5,9 @@ Advanced AI-Powered Resume Analyzer
 Uses DeepSeek API through OpenRouter for intelligent resume analysis.
 Provides comprehensive evaluation, skill gap analysis, ATS optimization,
 salary estimation, and personalized improvement recommendations.
+
+Copyright (c) 2025 SyazWak
+Licensed under the MIT License - see LICENSE file for details.
 """
 
 import os
