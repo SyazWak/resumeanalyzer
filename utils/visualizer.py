@@ -52,22 +52,79 @@ class ReportVisualizer:
     Supports multiple visualization libraries and output formats.
     """
     
-    def __init__(self, style: str = 'seaborn', color_palette: str = 'viridis'):
+    def __init__(self, style: str = 'seaborn', color_palette: str = 'viridis', theme: str = 'light'):
         """
         Initialize the ReportVisualizer.
         
         Args:
             style (str): Matplotlib style to use
             color_palette (str): Color palette for visualizations
+            theme (str): Theme ('light' or 'dark') for chart backgrounds
         """
         self.style = style
         self.color_palette = color_palette
+        self.theme = theme
         
         # Set up matplotlib if available
         if MATPLOTLIB_AVAILABLE:
             plt.style.use('default')  # Use default since seaborn might not be available
             if hasattr(sns, 'set_palette'):
                 sns.set_palette(color_palette)
+    
+    def get_theme_config(self) -> Dict[str, Any]:
+        """
+        Get theme configuration for charts.
+        
+        Returns:
+            Dict[str, Any]: Theme configuration with colors and styling
+        """
+        if self.theme == 'dark':
+            return {
+                'bg_color': '#0e1117',
+                'paper_bgcolor': '#262730',
+                'plot_bgcolor': '#262730',
+                'text_color': '#ffffff',
+                'grid_color': '#464853',
+                'font_color': '#ffffff'
+            }
+        else:
+            return {
+                'bg_color': '#ffffff',
+                'paper_bgcolor': '#ffffff',
+                'plot_bgcolor': '#ffffff',
+                'text_color': '#000000',
+                'grid_color': '#dee2e6',
+                'font_color': '#000000'
+            }
+    
+    def apply_theme_layout(self, fig: Any) -> Any:
+        """
+        Apply theme styling to a plotly figure.
+        
+        Args:
+            fig: Plotly figure object
+            
+        Returns:
+            Any: Updated figure with theme styling
+        """
+        theme_config = self.get_theme_config()
+        
+        fig.update_layout(
+            paper_bgcolor=theme_config['paper_bgcolor'],
+            plot_bgcolor=theme_config['plot_bgcolor'],
+            font=dict(color=theme_config['font_color']),
+            xaxis=dict(
+                gridcolor=theme_config['grid_color'],
+                color=theme_config['font_color']
+            ),
+            yaxis=dict(
+                gridcolor=theme_config['grid_color'],
+                color=theme_config['font_color']
+            ),
+            title=dict(font=dict(color=theme_config['font_color']))
+        )
+        
+        return fig
     
     def create_score_gauge(self, score: float, title: str = "Match Score") -> Optional[Any]:
         """
@@ -118,6 +175,8 @@ class ReportVisualizer:
         ))
         
         fig.update_layout(height=400, width=400)
+        # Apply theme styling
+        fig = self.apply_theme_layout(fig)
         return fig
     
     def create_keyword_comparison(self, 

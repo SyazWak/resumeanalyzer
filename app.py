@@ -35,43 +35,355 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for enhanced UI
-st.markdown("""
+# Auto-detect Streamlit theme
+@st.cache_data
+def get_system_theme():
+    """Get system theme preference with multiple detection methods."""
+    
+    # Method 1: Check URL parameters for explicit theme setting
+    try:
+        query_params = st.query_params
+        if 'theme' in query_params:
+            theme = str(query_params['theme']).lower()
+            if theme in ['dark', 'light']:
+                return theme
+    except:
+        pass
+    
+    # Method 2: Try to detect from browser/system (limited in Streamlit)
+    # This is a placeholder for more advanced detection
+    
+    # Method 3: Default to light mode
+    # The JavaScript detection will help users see the right theme,
+    # and they can always override in the sidebar
+    return 'light'
+
+def sync_with_streamlit_theme():
+    """Sync our theme with user preferences and system detection."""
+    
+    # Priority 1: Manual user override in sidebar
+    if 'manual_theme' in st.session_state:
+        if st.session_state.theme != st.session_state.manual_theme:
+            st.session_state.theme = st.session_state.manual_theme
+        return
+    
+    # Priority 2: URL parameter override
+    try:
+        query_params = st.query_params
+        if 'theme' in query_params:
+            url_theme = str(query_params['theme']).lower()
+            if url_theme in ['dark', 'light'] and st.session_state.theme != url_theme:
+                st.session_state.theme = url_theme
+                return
+    except:
+        pass
+    
+    # Priority 3: Auto-detection (system preference)
+    detected_theme = get_system_theme()
+    if st.session_state.get('theme') != detected_theme:
+        st.session_state.theme = detected_theme
+
+# Initialize theme
+if 'theme' not in st.session_state:
+    st.session_state.theme = get_system_theme()
+
+# Sync theme preferences
+sync_with_streamlit_theme()
+
+# Theme configurations
+themes = {
+    'light': {
+        'bg_color': '#ffffff',
+        'text_color': '#000000',
+        'secondary_bg': '#f8f9fa',
+        'border_color': '#dee2e6',
+        'accent_color': '#2196F3',
+        'success_color': '#28a745',
+        'warning_color': '#ffc107',
+        'danger_color': '#dc3545',
+        'ai_insight_bg': '#f0f8ff',
+        'skill_gap_bg': '#fff3cd',
+        'recommendation_bg': '#d4edda',
+        'card_bg': '#ffffff',
+        'shadow': 'rgba(0,0,0,0.1)'
+    },
+    'dark': {
+        'bg_color': '#0e1117',
+        'text_color': '#ffffff',
+        'secondary_bg': '#262730',
+        'border_color': '#464853',
+        'accent_color': '#4dabf7',
+        'success_color': '#51cf66',
+        'warning_color': '#ffd43b',
+        'danger_color': '#ff6b6b',
+        'ai_insight_bg': '#1a2332',
+        'skill_gap_bg': '#2d2a1f',
+        'recommendation_bg': '#1f2d1f',
+        'card_bg': '#262730',
+        'shadow': 'rgba(0,0,0,0.3)'
+    }
+}
+
+current_theme = themes[st.session_state.theme]
+
+# Custom CSS with theme support
+st.markdown(f"""
 <style>
-    .main > div {
+    /* Global theme variables */
+    :root {{
+        --bg-color: {current_theme['bg_color']};
+        --text-color: {current_theme['text_color']};
+        --secondary-bg: {current_theme['secondary_bg']};
+        --border-color: {current_theme['border_color']};
+        --accent-color: {current_theme['accent_color']};
+        --success-color: {current_theme['success_color']};
+        --warning-color: {current_theme['warning_color']};
+        --danger-color: {current_theme['danger_color']};
+        --card-bg: {current_theme['card_bg']};
+        --shadow: {current_theme['shadow']};
+    }}
+    
+    /* Auto-detect Streamlit theme */
+    <script>
+    function updateThemeFromStreamlit() {{
+        // Check Streamlit's current theme by examining the body or main app background
+        const stApp = document.querySelector('.stApp');
+        if (stApp) {{
+            const styles = window.getComputedStyle(stApp);
+            const bgColor = styles.backgroundColor;
+            
+            // Parse RGB values
+            const rgb = bgColor.match(/\\d+/g);
+            if (rgb) {{
+                const [r, g, b] = rgb.map(Number);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                
+                // Determine if we're in dark mode
+                const isDark = brightness < 128;
+                const currentTheme = isDark ? 'dark' : 'light';
+                
+                // Store in sessionStorage for Python to read
+                sessionStorage.setItem('streamlit_detected_theme', currentTheme);
+                
+                // Also set a data attribute for CSS targeting
+                document.documentElement.setAttribute('data-streamlit-theme', currentTheme);
+            }}
+        }}
+        
+        // Also check system preference as fallback
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (!sessionStorage.getItem('streamlit_detected_theme')) {{
+            sessionStorage.setItem('streamlit_detected_theme', systemPrefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-streamlit-theme', systemPrefersDark ? 'dark' : 'light');
+        }}
+    }}
+    
+    // Run detection when DOM is ready
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', updateThemeFromStreamlit);
+    }} else {{
+        updateThemeFromStreamlit();
+    }}
+    
+    // Also run periodically to catch theme changes
+    setInterval(updateThemeFromStreamlit, 1000);
+    </script>
+    
+    /* Main app styling */
+    .stApp {{
+        background-color: {current_theme['bg_color']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Sidebar styling */
+    .css-1d391kg {{
+        background-color: {current_theme['secondary_bg']} !important;
+    }}
+    
+    /* Main content area */
+    .main > div {{
         padding-top: 2rem;
-    }
-    .stAlert > div {
-        padding-top: 1rem;
-    }
-    .metric-container {
-        background: linear-gradient(90deg, #4CAF50, #2196F3);
+        background-color: {current_theme['bg_color']} !important;
+    }}
+    
+    /* Metric containers */
+    .metric-container {{
+        background: linear-gradient(90deg, {current_theme['success_color']}, {current_theme['accent_color']});
         padding: 1rem;
         border-radius: 10px;
         color: white;
         margin: 0.5rem 0;
-    }
-    .ai-insight {
-        background: #f0f8ff;
-        border-left: 4px solid #2196F3;
+        box-shadow: 0 2px 4px {current_theme['shadow']};
+    }}
+    
+    /* AI insight boxes */
+    .ai-insight {{
+        background: {current_theme['ai_insight_bg']} !important;
+        border-left: 4px solid {current_theme['accent_color']};
         padding: 1rem;
         margin: 1rem 0;
         border-radius: 5px;
-    }
-    .skill-gap {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
+        color: {current_theme['text_color']} !important;
+        box-shadow: 0 2px 4px {current_theme['shadow']};
+    }}
+    
+    /* Skill gap boxes */
+    .skill-gap {{
+        background: {current_theme['skill_gap_bg']} !important;
+        border-left: 4px solid {current_theme['warning_color']};
         padding: 1rem;
         margin: 1rem 0;
         border-radius: 5px;
-    }
-    .recommendation {
-        background: #d4edda;
-        border-left: 4px solid #28a745;
+        color: {current_theme['text_color']} !important;
+        box-shadow: 0 2px 4px {current_theme['shadow']};
+    }}
+    
+    /* Recommendation boxes */
+    .recommendation {{
+        background: {current_theme['recommendation_bg']} !important;
+        border-left: 4px solid {current_theme['success_color']};
         padding: 1rem;
         margin: 1rem 0;
         border-radius: 5px;
-    }
+        color: {current_theme['text_color']} !important;
+        box-shadow: 0 2px 4px {current_theme['shadow']};
+    }}
+    
+    /* Cards and containers */
+    .stContainer, .stColumn {{
+        background-color: {current_theme['bg_color']} !important;
+    }}
+    
+    /* Text elements */
+    .stMarkdown, .stText, .stWrite {{
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Headers */
+    h1, h2, h3, h4, h5, h6 {{
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Buttons */
+    .stButton > button {{
+        background-color: {current_theme['accent_color']} !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 5px !important;
+        padding: 0.5rem 1rem !important;
+        transition: all 0.3s ease !important;
+    }}
+    
+    .stButton > button:hover {{
+        background-color: {current_theme['success_color']} !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 8px {current_theme['shadow']} !important;
+    }}
+    
+    /* File uploader */
+    .stFileUploader {{
+        background-color: {current_theme['card_bg']} !important;
+        border: 2px dashed {current_theme['border_color']} !important;
+        border-radius: 10px !important;
+        padding: 1rem !important;
+    }}
+    
+    /* Text areas */
+    .stTextArea textarea {{
+        background-color: {current_theme['card_bg']} !important;
+        color: {current_theme['text_color']} !important;
+        border: 1px solid {current_theme['border_color']} !important;
+        border-radius: 5px !important;
+    }}
+    
+    /* Select boxes */
+    .stSelectbox select {{
+        background-color: {current_theme['card_bg']} !important;
+        color: {current_theme['text_color']} !important;
+        border: 1px solid {current_theme['border_color']} !important;
+    }}
+    
+    /* Alerts */
+    .stAlert {{
+        background-color: {current_theme['card_bg']} !important;
+        color: {current_theme['text_color']} !important;
+        border: 1px solid {current_theme['border_color']} !important;
+        border-radius: 5px !important;
+    }}
+    
+    /* Success messages */
+    .stSuccess {{
+        background-color: {current_theme['success_color']}20 !important;
+        border-left: 4px solid {current_theme['success_color']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Error messages */
+    .stError {{
+        background-color: {current_theme['danger_color']}20 !important;
+        border-left: 4px solid {current_theme['danger_color']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Warning messages */
+    .stWarning {{
+        background-color: {current_theme['warning_color']}20 !important;
+        border-left: 4px solid {current_theme['warning_color']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Info messages */
+    .stInfo {{
+        background-color: {current_theme['accent_color']}20 !important;
+        border-left: 4px solid {current_theme['accent_color']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    /* Theme toggle button */
+    .theme-toggle {{
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: {current_theme['accent_color']} !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50% !important;
+        width: 50px !important;
+        height: 50px !important;
+        font-size: 20px !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px {current_theme['shadow']} !important;
+        transition: all 0.3s ease !important;
+    }}
+    
+    .theme-toggle:hover {{
+        background: {current_theme['success_color']} !important;
+        transform: scale(1.1) !important;
+    }}
+    
+    /* Plotly charts theme adjustment */
+    .js-plotly-plot {{
+        background-color: {current_theme['bg_color']} !important;
+    }}
+    
+    /* Code blocks */
+    .stCode {{
+        background-color: {current_theme['secondary_bg']} !important;
+        color: {current_theme['text_color']} !important;
+        border: 1px solid {current_theme['border_color']} !important;
+    }}
+    
+    /* Expander */
+    .streamlit-expanderHeader {{
+        background-color: {current_theme['card_bg']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
+    
+    .streamlit-expanderContent {{
+        background-color: {current_theme['secondary_bg']} !important;
+        color: {current_theme['text_color']} !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -82,7 +394,7 @@ class EnhancedStreamlitApp:
     def __init__(self):
         """Initialize the application components."""
         self.text_extractor = TextExtractor()
-        self.visualizer = ReportVisualizer()
+        self.visualizer = ReportVisualizer(theme=st.session_state.theme)
         
         # Initialize AI analyzer
         self.ai_analyzer = None
@@ -126,6 +438,55 @@ class EnhancedStreamlitApp:
     def render_sidebar(self):
         """Render the sidebar with configuration options."""
         st.sidebar.title("⚙️ AI Configuration")
+        
+        # Theme settings
+        st.sidebar.subheader("🎨 Theme Settings")
+        
+        # Show current theme status
+        current_theme_display = "🌙 Dark Mode" if st.session_state.theme == 'dark' else "☀️ Light Mode"
+        st.sidebar.info(f"**Current Theme:** {current_theme_display}")
+        
+        # Theme selection
+        theme_options = {
+            "Auto (System Preference)": "auto",
+            "☀️ Light Mode": "light", 
+            "🌙 Dark Mode": "dark"
+        }
+        
+        # Determine current selection
+        if 'manual_theme' not in st.session_state:
+            current_selection = "Auto (System Preference)"
+        else:
+            manual = st.session_state.manual_theme
+            current_selection = "☀️ Light Mode" if manual == 'light' else "🌙 Dark Mode"
+        
+        selected_theme = st.sidebar.selectbox(
+            "Theme Preference:",
+            options=list(theme_options.keys()),
+            index=list(theme_options.keys()).index(current_selection),
+            help="Choose your preferred theme. Auto mode follows your system/browser preference."
+        )
+        
+        # Apply theme selection
+        selected_value = theme_options[selected_theme]
+        
+        if selected_value == "auto":
+            # Remove manual override
+            if 'manual_theme' in st.session_state:
+                del st.session_state.manual_theme
+                st.rerun()
+        else:
+            # Set manual theme
+            if st.session_state.get('manual_theme') != selected_value:
+                st.session_state.manual_theme = selected_value
+                st.session_state.theme = selected_value
+                st.rerun()
+        
+        # Add helpful info
+        if selected_theme == "Auto (System Preference)":
+            st.sidebar.caption("💡 Theme automatically matches your system/browser dark mode setting")
+        
+        st.sidebar.divider()
         
         # AI settings
         st.sidebar.subheader("🤖 DeepSeek AI Status")
@@ -346,7 +707,10 @@ class EnhancedStreamlitApp:
                         range=[0, 100]
                     )),
                 showlegend=False,
-                title="Score Breakdown"
+                title="Score Breakdown",
+                paper_bgcolor=current_theme['bg_color'],
+                plot_bgcolor=current_theme['bg_color'],
+                font=dict(color=current_theme['text_color'])
             )
             st.plotly_chart(fig, use_container_width=True)
     
@@ -439,6 +803,12 @@ class EnhancedStreamlitApp:
                     }
                 }
             ))
+            fig.update_layout(
+                paper_bgcolor=current_theme['bg_color'],
+                plot_bgcolor=current_theme['bg_color'],
+                font=dict(color=current_theme['text_color']),
+                height=300
+            )
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
@@ -535,7 +905,20 @@ class EnhancedStreamlitApp:
                 color='Score',
                 color_continuous_scale='viridis'
             )
-            fig.update_layout(showlegend=False)
+            fig.update_layout(
+                showlegend=False,
+                paper_bgcolor=current_theme['bg_color'],
+                plot_bgcolor=current_theme['bg_color'],
+                font=dict(color=current_theme['text_color']),
+                xaxis=dict(
+                    gridcolor=current_theme['border_color'],
+                    color=current_theme['text_color']
+                ),
+                yaxis=dict(
+                    gridcolor=current_theme['border_color'],
+                    color=current_theme['text_color']
+                )
+            )
             st.plotly_chart(fig, use_container_width=True)
     
     def render_results_tab(self):
