@@ -489,10 +489,25 @@ class EnhancedStreamlitApp:
         st.sidebar.divider()
         
         # AI settings
-        st.sidebar.subheader("🤖 DeepSeek AI Status")
+        st.sidebar.subheader("🤖 AI Model Configuration")
         if self.ai_available:
             st.sidebar.success("✅ AI Analysis Ready")
-            st.sidebar.info("Using: deepseek/deepseek-chat-v3-0324:free")
+            
+            # Show primary model
+            primary_model = os.getenv('DEEPSEEK_MODEL', 'deepseek/deepseek-chat-v3-0324:free')
+            st.sidebar.info(f"**Primary:** {primary_model}")
+            
+            # Show fallback models
+            fallback_models = os.getenv('FALLBACK_MODELS', '')
+            if fallback_models:
+                fallback_list = [model.strip() for model in fallback_models.split(',')]
+                st.sidebar.caption("**Fallback Models:**")
+                for i, model in enumerate(fallback_list[:3], 1):  # Show first 3
+                    st.sidebar.caption(f"  {i}. {model}")
+                if len(fallback_list) > 3:
+                    st.sidebar.caption(f"  +{len(fallback_list) - 3} more...")
+            
+            st.sidebar.caption("💡 Automatically switches to fallback models when rate limited")
         else:
             st.sidebar.error("❌ AI Analysis Unavailable")
             st.sidebar.warning("Please configure your OpenRouter API key")

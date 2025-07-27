@@ -119,10 +119,24 @@ class AdvancedAIAnalyzer:
         self.api_key = os.getenv('OPENROUTER_API_KEY', '').strip().strip("'\"")
         self.base_url = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
         
+        # Load fallback models
+        self.fallback_models = []
+        fallback_models_str = os.getenv('FALLBACK_MODELS', '').strip()
+        if fallback_models_str:
+            self.fallback_models = [model.strip() for model in fallback_models_str.split(',')]
+        
+        # Add individual fallback model for backward compatibility
+        fallback_model = os.getenv('FALLBACK_MODEL', '').strip()
+        if fallback_model and fallback_model not in self.fallback_models:
+            self.fallback_models.append(fallback_model)
+        
         if not self.api_key:
             logger.warning("OpenRouter API key not found. AI analysis will be limited.")
         else:
             logger.info(f"API key loaded successfully (length: {len(self.api_key)})")
+            logger.info(f"Primary model: {self.config.model}")
+            if self.fallback_models:
+                logger.info(f"Fallback models: {', '.join(self.fallback_models)}")
             
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -130,6 +144,9 @@ class AdvancedAIAnalyzer:
             "HTTP-Referer": "https://github.com/ai-resume-analyzer",
             "X-Title": "AI Resume Analyzer"
         }
+        
+        # Track which model was last used successfully
+        self.last_successful_model = self.config.model
     
     def analyze_resume_comprehensive(self, 
                                    resume_text: str, 
@@ -191,62 +208,124 @@ class AdvancedAIAnalyzer:
             return self._create_fallback_analysis(resume_text, job_description)
     
     def _make_api_request(self, prompt: str, system_prompt: str = "") -> str:
-        """Make a request to the AI API."""
+        """Make a request to the AI API with fallback model support."""
         if not self.api_key:
             return "AI analysis unavailable - no API key configured"
         
-        try:
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
+        # List of models to try (primary + fallbacks)
+        models_to_try = [self.config.model] + self.fallback_models
+        
+        for i, model in enumerate(models_to_try):
+            if i > 0:
+                logger.info(f"Trying fallback model {i}: {model}")
             
-            payload = {
-                "model": self.config.model,
-                "messages": messages,
-                "temperature": self.config.temperature,
-                "max_tokens": self.config.max_tokens
-            }
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=self.headers,
-                data=json.dumps(payload),  # Use data with json.dumps for better compatibility
-                timeout=30
-            )
-            
-            logger.info(f"API Response Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                return result['choices'][0]['message']['content']
-            elif response.status_code == 401:
-                error_msg = "❌ API authentication failed. Please check your OpenRouter API key and account status."
-                logger.error(f"{error_msg} Response: {response.text}")
-                return f"AUTH_ERROR: {error_msg}"
-            elif response.status_code == 402:
-                error_msg = "💳 Insufficient credits. Please add credits to your OpenRouter account."
-                logger.error(f"{error_msg} Response: {response.text}")
-                return f"CREDIT_ERROR: {error_msg}"
-            elif response.status_code == 429:
-                error_msg = "⏰ Rate limit exceeded. Please try again later."
-                logger.error(f"{error_msg} Response: {response.text}")
-                return f"RATE_LIMIT_ERROR: {error_msg}"
-            else:
-                logger.error(f"API request failed: {response.status_code} - {response.text}")
-                return f"API Error {response.status_code}: Please check your OpenRouter account and API key."
+            try:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
                 
-        except requests.exceptions.Timeout:
-            error_msg = "⏱️ API request timed out. Please try again."
-            logger.error(error_msg)
-            return f"TIMEOUT_ERROR: {error_msg}"
-        except requests.exceptions.ConnectionError:
-            error_msg = "🌐 Unable to connect to OpenRouter API. Please check your internet connection."
-            logger.error(error_msg)
-            return f"CONNECTION_ERROR: {error_msg}"
-        except Exception as e:
-            logger.error(f"API request error: {e}")
-            return f"REQUEST_ERROR: {str(e)}"
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": self.config.temperature,
+                    "max_tokens": self.config.max_tokens
+                }
+                
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    data=json.dumps(payload),
+                    timeout=30
+                )
+                
+                logger.info(f"API Response Status for {model}: {response.status_code}")
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    self.last_successful_model = model  # Track successful model
+                    if i > 0:
+                        logger.info(f"✅ Successfully switched to fallback model: {model}")
+                    return result['choices'][0]['message']['content']
+                
+                elif response.status_code == 401:
+                    error_msg = "❌ API authentication failed. Please check your OpenRouter API key and account status."
+                    logger.error(f"{error_msg} Response: {response.text}")
+                    # Auth errors are not recoverable with fallback models
+                    return f"AUTH_ERROR: {error_msg}"
+                
+                elif response.status_code == 402:
+                    error_msg = "💳 Insufficient credits. Please add credits to your OpenRouter account."
+                    logger.error(f"{error_msg} Response: {response.text}")
+                    # Credit errors are not recoverable with fallback models
+                    return f"CREDIT_ERROR: {error_msg}"
+                
+                elif response.status_code == 429:
+                    error_msg = f"⏰ Rate limit exceeded for {model}."
+                    logger.warning(f"{error_msg} Response: {response.text}")
+                    
+                    # If this is not the last model, try the next one
+                    if i < len(models_to_try) - 1:
+                        logger.info(f"🔄 Rate limited on {model}, trying next fallback model...")
+                        continue
+                    else:
+                        # All models exhausted
+                        return f"RATE_LIMIT_ERROR: Rate limit exceeded on all available models. Please try again later."
+                
+                else:
+                    logger.error(f"API request failed for {model}: {response.status_code} - {response.text}")
+                    
+                    # If this is not the last model, try the next one
+                    if i < len(models_to_try) - 1:
+                        logger.info(f"🔄 Error with {model}, trying next fallback model...")
+                        continue
+                    else:
+                        return f"API Error {response.status_code}: Please check your OpenRouter account and API key."
+                        
+            except requests.exceptions.Timeout:
+                error_msg = f"⏱️ API request timed out for {model}."
+                logger.error(error_msg)
+                
+                # If this is not the last model, try the next one
+                if i < len(models_to_try) - 1:
+                    logger.info(f"🔄 Timeout with {model}, trying next fallback model...")
+                    continue
+                else:
+                    return f"TIMEOUT_ERROR: API request timed out on all available models. Please try again."
+            
+            except requests.exceptions.ConnectionError:
+                error_msg = f"🌐 Unable to connect to OpenRouter API for {model}."
+                logger.error(error_msg)
+                
+                # If this is not the last model, try the next one
+                if i < len(models_to_try) - 1:
+                    logger.info(f"🔄 Connection error with {model}, trying next fallback model...")
+                    continue
+                else:
+                    return f"CONNECTION_ERROR: Unable to connect to OpenRouter API. Please check your internet connection."
+            
+            except Exception as e:
+                logger.error(f"API request error for {model}: {e}")
+                
+                # If this is not the last model, try the next one
+                if i < len(models_to_try) - 1:
+                    logger.info(f"🔄 Error with {model}, trying next fallback model...")
+                    continue
+                else:
+                    return f"REQUEST_ERROR: {str(e)}"
+        
+        # This should not be reached, but just in case
+        return "ERROR: All fallback models failed"
+    
+    def get_model_status(self) -> Dict[str, Any]:
+        """Get current model configuration and status."""
+        return {
+            "primary_model": self.config.model,
+            "fallback_models": self.fallback_models,
+            "last_successful_model": getattr(self, 'last_successful_model', self.config.model),
+            "total_models_available": 1 + len(self.fallback_models),
+            "api_configured": bool(self.api_key)
+        }
     
     def _analyze_match_score(self, resume_text: str, job_description: str) -> MatchScore:
         """Analyze detailed match score using AI."""
