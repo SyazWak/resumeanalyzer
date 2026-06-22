@@ -502,9 +502,9 @@ class EnhancedStreamlitApp:
                 polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
                 showlegend=False,
                 title="Score Breakdown",
-                paper_bgcolor=current_theme["bg_color"],
-                plot_bgcolor=current_theme["bg_color"],
-                font=dict(color=current_theme["text_color"]),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="inherit"),
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -597,9 +597,9 @@ class EnhancedStreamlitApp:
                 )
             )
             fig.update_layout(
-                paper_bgcolor=current_theme["bg_color"],
-                plot_bgcolor=current_theme["bg_color"],
-                font=dict(color=current_theme["text_color"]),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="inherit"),
                 height=300,
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -722,14 +722,14 @@ class EnhancedStreamlitApp:
             )
             fig.update_layout(
                 showlegend=False,
-                paper_bgcolor=current_theme["bg_color"],
-                plot_bgcolor=current_theme["bg_color"],
-                font=dict(color=current_theme["text_color"]),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="inherit"),
                 xaxis=dict(
-                    gridcolor=current_theme["border_color"], color=current_theme["text_color"]
+                    gridcolor="rgba(128,128,128,0.2)", color="inherit"
                 ),
                 yaxis=dict(
-                    gridcolor=current_theme["border_color"], color=current_theme["text_color"]
+                    gridcolor="rgba(128,128,128,0.2)", color="inherit"
                 ),
             )
             st.plotly_chart(fig, use_container_width=True)
