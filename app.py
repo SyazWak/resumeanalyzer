@@ -39,6 +39,7 @@ css_path = project_root / "static" / "styles.css"
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
+
 class EnhancedStreamlitApp:
     """Enhanced Streamlit application with AI capabilities."""
 
@@ -93,7 +94,9 @@ class EnhancedStreamlitApp:
         # AI Model (collapsible)
         with st.sidebar.expander("🤖 AI Model", expanded=True):
             if self.ai_available:
-                primary_model = os.getenv("AI_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free"))
+                primary_model = os.getenv(
+                    "AI_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free")
+                )
                 st.caption(f"**Model:** {primary_model}")
 
                 fallback_models = os.getenv("FALLBACK_MODELS", "")
@@ -136,11 +139,11 @@ class EnhancedStreamlitApp:
             - Check `.env` has valid `OPENROUTER_API_KEY`
             - Verify OpenRouter account has credits
             - Check internet connectivity
-            
+
             **PDF Extraction Fails**
             - Ensure PDF is not password-protected
             - Try using text input instead
-            
+
             **Installation Issues**
             - Run `pip install -r requirements.txt`
             - Ensure virtual environment is activated
@@ -570,12 +573,8 @@ class EnhancedStreamlitApp:
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="inherit"),
-                xaxis=dict(
-                    gridcolor="rgba(128,128,128,0.2)", color="inherit"
-                ),
-                yaxis=dict(
-                    gridcolor="rgba(128,128,128,0.2)", color="inherit"
-                ),
+                xaxis=dict(gridcolor="rgba(128,128,128,0.2)", color="inherit"),
+                yaxis=dict(gridcolor="rgba(128,128,128,0.2)", color="inherit"),
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -679,8 +678,8 @@ class EnhancedStreamlitApp:
                                 section.section_name,
                                 section.original_text,
                                 st.session_state.job_text,
-                                result.metadata.get('missing_skills', []),
-                                result.metadata.get('priority_skills', [])
+                                result.metadata.get("missing_skills", []),
+                                result.metadata.get("priority_skills", []),
                             )
                             result.sections[i] = new_result
                             st.rerun()
