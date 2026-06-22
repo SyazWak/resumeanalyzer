@@ -25,6 +25,7 @@ sys.path.insert(0, str(project_root))
 from utils.text_extractor import TextExtractor
 from utils.visualizer import ReportVisualizer
 from utils.ai_analyzer import AdvancedAIAnalyzer
+from utils.resume_writer import ResumeWriter, SectionRewrite
 
 
 # Configure Streamlit page
@@ -90,6 +91,11 @@ if 'theme' not in st.session_state:
 # Sync theme preferences
 sync_with_streamlit_theme()
 
+# Load CSS from file
+css_path = project_root / "static" / "styles.css"
+if css_path.exists():
+    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+
 # Theme configurations
 themes = {
     'light': {
@@ -125,11 +131,6 @@ themes = {
 }
 
 current_theme = themes[st.session_state.theme]
-
-# Load CSS from file
-css_path = project_root / "static" / "styles.css"
-if css_path.exists():
-    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 # Inject theme variables
 st.markdown(f"""
@@ -181,10 +182,11 @@ class EnhancedStreamlitApp:
         self.render_sidebar()
         
         # Main content tabs
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📄 Analysis", 
             "🎯 AI Insights", 
-            "📊 Visualizations", 
+            "📊 Visualizations",
+            "✏️ Rewrite Resume",
             "💾 Results"
         ])
         
@@ -198,6 +200,9 @@ class EnhancedStreamlitApp:
             self.render_visualizations_tab()
         
         with tab4:
+            self.render_rewrite_tab()
+        
+        with tab5:
             self.render_results_tab()
     
     def render_sidebar(self):
@@ -700,6 +705,174 @@ class EnhancedStreamlitApp:
                 )
             )
             st.plotly_chart(fig, use_container_width=True)
+    
+    def render_rewrite_tab(self):
+        """Render the resume rewrite tab."""
+        st.header("✏️ Rewrite Resume")
+        
+        if not hasattr(st.session_state, 'analysis_results') or not st.session_state.analysis_results:
+            st.info("🔍 Run an analysis first to enable resume rewriting!")
+            return
+        
+        if not self.ai_available:
+            st.error("❌ AI analysis is required for resume rewriting. Please configure your OpenRouter API key.")
+            return
+        
+        # Rewrite button
+        if 'rewrite_result' not in st.session_state:
+            if st.button("🔄 Rewrite Resume", type="primary"):
+                with st.spinner("🤖 Rewriting resume sections..."):
+                    try:
+                        writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
+                        result = writer.rewrite_resume(
+                            st.session_state.resume_text,
+                            st.session_state.job_text,
+                            st.session_state.analysis_results
+                        )
+                        st.session_state.rewrite_result = result
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Rewrite failed: {str(e)}")
+            return
+        
+        # Show diff view
+        result = st.session_state.rewrite_result
+        
+        st.success(f"✅ Rewritten {len(result.sections)} sections!")
+        st.markdown(f"*{result.overall_explanation}*")
+        
+        st.markdown("---")
+        
+        # Accept All / Reject All
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("✅ Accept All"):
+                for section in result.sections:
+                    section.accepted = True
+                st.rerun()
+        with col2:
+            if st.button("❌ Reject All"):
+                for section in result.sections:
+                    section.accepted = False
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Section-by-section diff view
+        for i, section in enumerate(result.sections):
+            with st.expander(f"📝 {section.section_name}", expanded=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Original:**")
+                    st.text_area(
+                        "Original",
+                        section.original_text,
+                        height=150,
+                        disabled=True,
+                        key=f"orig_{i}",
+                        label_visibility="collapsed"
+                    )
+                
+                with col2:
+                    st.markdown("**Improved:**")
+                    st.text_area(
+                        "Improved",
+                        section.improved_text,
+                        height=150,
+                        disabled=True,
+                        key=f"improved_{i}",
+                        label_visibility="collapsed"
+                    )
+                
+                st.markdown(f"💡 **Changes:** {section.explanation}")
+                
+                # Accept/reject toggle
+                section.accepted = st.checkbox(
+                    "Accept this change",
+                    value=section.accepted,
+                    key=f"accept_{i}"
+                )
+        
+        st.markdown("---")
+        
+        # Generate final version
+        if st.button("📄 Generate Final Version", type="primary"):
+            writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
+            final_text = writer.generate_final_version(result.sections)
+            st.session_state.final_resume_text = final_text
+            st.rerun()
+        
+        # Show final version and download buttons
+        if 'final_resume_text' in st.session_state:
+            st.markdown("---")
+            st.subheader("📄 Final Resume")
+            
+            st.text_area(
+                "Final Resume",
+                st.session_state.final_resume_text,
+                height=400,
+                disabled=True,
+                key="final_display"
+            )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Download as TXT
+                st.download_button(
+                    label="📥 Download TXT",
+                    data=st.session_state.final_resume_text,
+                    file_name="improved_resume.txt",
+                    mime="text/plain"
+                )
+            
+            with col2:
+                # Generate and download as PDF/DOCX
+                if st.button("📥 Generate PDF & DOCX"):
+                    writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
+                    
+                    # Save to temp files
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as pdf_file:
+                        pdf_path = pdf_file.name
+                    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as docx_file:
+                        docx_path = docx_file.name
+                    
+                    writer.export_pdf(st.session_state.final_resume_text, pdf_path)
+                    writer.export_docx(st.session_state.final_resume_text, docx_path)
+                    
+                    # Read files for download
+                    with open(pdf_path, 'rb') as f:
+                        pdf_data = f.read()
+                    with open(docx_path, 'rb') as f:
+                        docx_data = f.read()
+                    
+                    # Clean up
+                    os.remove(pdf_path)
+                    os.remove(docx_path)
+                    
+                    st.session_state.pdf_data = pdf_data
+                    st.session_state.docx_data = docx_data
+                    st.rerun()
+            
+            # Show download buttons if data is available
+            if 'pdf_data' in st.session_state:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="📥 Download PDF",
+                        data=st.session_state.pdf_data,
+                        file_name="improved_resume.pdf",
+                        mime="application/pdf"
+                    )
+                with col2:
+                    st.download_button(
+                        label="📥 Download DOCX",
+                        data=st.session_state.docx_data,
+                        file_name="improved_resume.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
     
     def render_results_tab(self):
         """Render results tab."""
