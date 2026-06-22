@@ -155,6 +155,11 @@ class AdvancedAIAnalyzer:
         # Track which model was last used successfully
         self.last_successful_model = self.config.model
 
+        # Feature flags
+        self.enable_salary = os.getenv('ENABLE_SALARY_ESTIMATION', 'true').lower() == 'true'
+        self.enable_skill_gap = os.getenv('ENABLE_SKILL_GAP_ANALYSIS', 'true').lower() == 'true'
+        self.enable_ats = os.getenv('ENABLE_ATS_OPTIMIZATION', 'true').lower() == 'true'
+
     def analyze_resume_comprehensive(
         self,
         resume_text: str,
@@ -174,49 +179,78 @@ class AdvancedAIAnalyzer:
         """
         logger.info("Starting comprehensive AI analysis...")
 
+        # Match score (critical — failure is total)
         try:
-            # Get detailed match analysis
             match_score = self._analyze_match_score(resume_text, job_description)
+        except Exception as e:
+            logger.error(f"Match score analysis failed: {e}")
+            match_score = MatchScore(
+                overall_score=50.0, technical_skills_score=50.0, experience_score=50.0,
+                education_score=50.0, soft_skills_score=50.0, ats_score=50.0,
+                explanation=f"Analysis error: {str(e)}"
+            )
 
-            # Analyze skill gaps
-            skill_gap = self._analyze_skill_gap(resume_text, job_description)
+        # Skill gap analysis (optional via feature flag)
+        skill_gap = SkillGap(
+            missing_skills=["Analysis disabled or failed"],
+            skill_level_gaps={},
+            recommended_learning_path=[],
+            priority_skills=[],
+        )
+        if self.enable_skill_gap:
+            try:
+                skill_gap = self._analyze_skill_gap(resume_text, job_description)
+            except Exception as e:
+                logger.error(f"Skill gap analysis failed: {e}")
 
-            # ATS optimization
-            ats_optimization = self._analyze_ats_optimization(resume_text, job_description)
+        # ATS optimization (optional via feature flag)
+        ats_optimization = ATSOptimization(
+            ats_score=70.0, keyword_density_score=70.0, format_score=80.0,
+            missing_ats_keywords=[], formatting_improvements=["Analysis disabled or failed"],
+            keyword_suggestions=[],
+        )
+        if self.enable_ats:
+            try:
+                ats_optimization = self._analyze_ats_optimization(resume_text, job_description)
+            except Exception as e:
+                logger.error(f"ATS optimization analysis failed: {e}")
 
-            # Salary estimation (if enabled)
-            salary_estimation = None
-            if self.config.enable_salary_estimation:
+        # Salary estimation (optional via feature flag)
+        salary_estimation = None
+        if self.enable_salary:
+            try:
                 salary_estimation = self._estimate_salary(
                     resume_text, job_description, additional_context
                 )
+            except Exception as e:
+                logger.error(f"Salary estimation failed: {e}")
 
-            # Get detailed feedback
+        # Detailed feedback (non-critical)
+        try:
             detailed_feedback = self._generate_detailed_feedback(
                 resume_text, job_description, match_score, skill_gap
             )
-
-            # Create improvement plan
-            improvement_plan = self._create_improvement_plan(
-                match_score, skill_gap, ats_optimization
-            )
-
-            # Generate next steps
-            next_steps = self._generate_next_steps(improvement_plan, skill_gap)
-
-            return ComprehensiveAnalysis(
-                match_score=match_score,
-                skill_gap=skill_gap,
-                salary_estimation=salary_estimation,
-                ats_optimization=ats_optimization,
-                detailed_feedback=detailed_feedback,
-                improvement_plan=improvement_plan,
-                next_steps=next_steps,
-            )
-
         except Exception as e:
-            logger.error(f"AI analysis failed: {e}")
-            return self._create_fallback_analysis(resume_text, job_description)
+            logger.error(f"Detailed feedback generation failed: {e}")
+            detailed_feedback = {"message": f"Feedback generation failed: {str(e)}"}
+
+        # Create improvement plan (uses already-computed data)
+        improvement_plan = self._create_improvement_plan(
+            match_score, skill_gap, ats_optimization
+        )
+
+        # Generate next steps
+        next_steps = self._generate_next_steps(improvement_plan, skill_gap)
+
+        return ComprehensiveAnalysis(
+            match_score=match_score,
+            skill_gap=skill_gap,
+            salary_estimation=salary_estimation,
+            ats_optimization=ats_optimization,
+            detailed_feedback=detailed_feedback,
+            improvement_plan=improvement_plan,
+            next_steps=next_steps,
+        )
 
     def _make_api_request(self, prompt: str, system_prompt: str = "") -> str:
         """Make a request to the AI API with fallback model support."""
@@ -332,6 +366,54 @@ class AdvancedAIAnalyzer:
         # This should not be reached, but just in case
         return "ERROR: All fallback models failed"
 
+    def _parse_json_response(self, response: str) -> Dict[str, Any]:
+        """
+        Parse JSON from AI response with multiple fallback strategies.
+
+        Args:
+            response: Raw AI response text
+
+        Returns:
+            Parsed JSON dict or fallback with raw text
+        """
+        # Strategy 1: Direct parse
+        try:
+            return json.loads(response.strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Strategy 2: Extract from markdown fences
+        if "```json" in response:
+            try:
+                json_text = response.split("```json")[1].split("```")[0]
+                return json.loads(json_text.strip())
+            except (json.JSONDecodeError, IndexError):
+                pass
+
+        # Strategy 3: Find first { and last }
+        try:
+            start = response.find('{')
+            end = response.rfind('}') + 1
+            if start != -1 and end > start:
+                return json.loads(response[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Strategy 4: Clean common issues (trailing commas)
+        try:
+            import re
+            cleaned = re.sub(r',\s*([}\]])', r'\1', response)
+            start = cleaned.find('{')
+            end = cleaned.rfind('}') + 1
+            if start != -1 and end > start:
+                return json.loads(cleaned[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Strategy 5: Fallback — return raw text in explanation
+        logger.warning(f"Failed to parse JSON response: {response[:200]}...")
+        return {"explanation": response, "_parse_failed": True}
+
     def get_model_status(self) -> Dict[str, Any]:
         """Get current model configuration and status."""
         return {
@@ -355,7 +437,14 @@ Return a JSON object with this exact structure:
   "soft_skills_score": <number 0-100>,
   "ats_score": <number 0-100>,
   "explanation": "<string: 2-3 sentence scoring rationale>"
-}"""
+}
+
+Scoring rubric:
+- 90-100: Expert/Exceptional match
+- 70-89: Strong/Proficient match
+- 50-69: Moderate/Adequate match
+- 30-49: Below average/Gaps present
+- 0-29: Poor/Significant gaps"""
 
         prompt = f"""Analyze this resume against the job description. Score each category 0-100.
 
@@ -370,36 +459,23 @@ Respond with JSON only."""
 
         response = self._make_api_request(prompt, system_prompt)
 
-        try:
-            # Extract JSON from response
-            if "```json" in response:
-                json_text = response.split("```json")[1].split("```")[0]
-            else:
-                json_text = response
-
-            score_data = json.loads(json_text.strip())
-
+        score_data = self._parse_json_response(response)
+        if score_data.get("_parse_failed"):
             return MatchScore(
-                overall_score=score_data.get("overall_score", 0),
-                technical_skills_score=score_data.get("technical_skills_score", 0),
-                experience_score=score_data.get("experience_score", 0),
-                education_score=score_data.get("education_score", 0),
-                soft_skills_score=score_data.get("soft_skills_score", 0),
-                ats_score=score_data.get("ats_score", 0),
-                explanation=score_data.get("explanation", "Analysis completed"),
+                overall_score=50.0, technical_skills_score=50.0, experience_score=50.0,
+                education_score=50.0, soft_skills_score=50.0, ats_score=50.0,
+                explanation=score_data.get("explanation", "Analysis completed")
             )
 
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse AI response for match score")
-            return MatchScore(
-                overall_score=50.0,
-                technical_skills_score=50.0,
-                experience_score=50.0,
-                education_score=50.0,
-                soft_skills_score=50.0,
-                ats_score=50.0,
-                explanation=f"AI Analysis Result: {response[:500]}...",
-            )
+        return MatchScore(
+            overall_score=score_data.get("overall_score", 0),
+            technical_skills_score=score_data.get("technical_skills_score", 0),
+            experience_score=score_data.get("experience_score", 0),
+            education_score=score_data.get("education_score", 0),
+            soft_skills_score=score_data.get("soft_skills_score", 0),
+            ats_score=score_data.get("ats_score", 0),
+            explanation=score_data.get("explanation", "Analysis completed"),
+        )
 
     def _analyze_skill_gap(self, resume_text: str, job_description: str) -> SkillGap:
         """Analyze skill gaps using AI."""
@@ -410,8 +486,15 @@ Return a JSON object with this exact structure:
   "missing_skills": ["skill1", "skill2"],
   "skill_level_gaps": {"skill_name": "gap description"},
   "recommended_learning_path": ["step1", "step2"],
-  "priority_skills": ["skill1", "skill2"]
-}"""
+  "priority_skills": ["skill1", "skill2"],
+  "estimated_development_time": {"skill_name": "timeframe"}
+}
+
+For estimated_development_time, use:
+- "1-2 weeks" for basic proficiency
+- "1-3 months" for working knowledge
+- "3-6 months" for competence
+- "6+ months" for expertise"""
 
         prompt = f"""Analyze skill gaps between this resume and job description.
 
@@ -426,29 +509,21 @@ Respond with JSON only."""
 
         response = self._make_api_request(prompt, system_prompt)
 
-        try:
-            if "```json" in response:
-                json_text = response.split("```json")[1].split("```")[0]
-            else:
-                json_text = response
-
-            gap_data = json.loads(json_text.strip())
-
-            return SkillGap(
-                missing_skills=gap_data.get("missing_skills", []),
-                skill_level_gaps=gap_data.get("skill_level_gaps", {}),
-                recommended_learning_path=gap_data.get("recommended_learning_path", []),
-                priority_skills=gap_data.get("priority_skills", []),
-            )
-
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse AI response for skill gap")
+        gap_data = self._parse_json_response(response)
+        if gap_data.get("_parse_failed"):
             return SkillGap(
                 missing_skills=["Unable to analyze"],
                 skill_level_gaps={},
                 recommended_learning_path=["Review job requirements", "Update skills"],
                 priority_skills=[],
             )
+
+        return SkillGap(
+            missing_skills=gap_data.get("missing_skills", []),
+            skill_level_gaps=gap_data.get("skill_level_gaps", {}),
+            recommended_learning_path=gap_data.get("recommended_learning_path", []),
+            priority_skills=gap_data.get("priority_skills", []),
+        )
 
     def _analyze_ats_optimization(self, resume_text: str, job_description: str) -> ATSOptimization:
         """Analyze ATS optimization opportunities."""
@@ -461,7 +536,8 @@ Return a JSON object with this exact structure:
   "format_score": <number 0-100>,
   "missing_ats_keywords": ["keyword1", "keyword2"],
   "formatting_improvements": ["improvement1", "improvement2"],
-  "keyword_suggestions": ["suggestion1", "suggestion2"]
+  "keyword_suggestions": ["suggestion1", "suggestion2"],
+  "keyword_placement": {"keyword": "where to add it in the resume"}
 }"""
 
         prompt = f"""Analyze this resume for ATS optimization against the job description.
@@ -473,37 +549,27 @@ JOB DESCRIPTION:
 {job_description[:2000]}
 
 Evaluate ATS compatibility, keyword density, format, and missing keywords.
+For each keyword suggestion, specify exactly where in the resume it should be placed.
 Respond with JSON only."""
 
         response = self._make_api_request(prompt, system_prompt)
 
-        try:
-            if "```json" in response:
-                json_text = response.split("```json")[1].split("```")[0]
-            else:
-                json_text = response
-
-            ats_data = json.loads(json_text.strip())
-
+        ats_data = self._parse_json_response(response)
+        if ats_data.get("_parse_failed"):
             return ATSOptimization(
-                ats_score=ats_data.get("ats_score", 70),
-                keyword_density_score=ats_data.get("keyword_density_score", 70),
-                format_score=ats_data.get("format_score", 80),
-                missing_ats_keywords=ats_data.get("missing_ats_keywords", []),
-                formatting_improvements=ats_data.get("formatting_improvements", []),
-                keyword_suggestions=ats_data.get("keyword_suggestions", []),
-            )
-
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse AI response for ATS optimization")
-            return ATSOptimization(
-                ats_score=75.0,
-                keyword_density_score=70.0,
-                format_score=80.0,
-                missing_ats_keywords=[],
-                formatting_improvements=["Review ATS compatibility"],
+                ats_score=75.0, keyword_density_score=70.0, format_score=80.0,
+                missing_ats_keywords=[], formatting_improvements=["Review ATS compatibility"],
                 keyword_suggestions=["Add job-relevant keywords"],
             )
+
+        return ATSOptimization(
+            ats_score=ats_data.get("ats_score", 70),
+            keyword_density_score=ats_data.get("keyword_density_score", 70),
+            format_score=ats_data.get("format_score", 80),
+            missing_ats_keywords=ats_data.get("missing_ats_keywords", []),
+            formatting_improvements=ats_data.get("formatting_improvements", []),
+            keyword_suggestions=ats_data.get("keyword_suggestions", []),
+        )
 
     def _estimate_salary(
         self, resume_text: str, job_description: str, context: Optional[Dict[str, Any]] = None
@@ -538,33 +604,23 @@ Respond with JSON only."""
 
         response = self._make_api_request(prompt, system_prompt)
 
-        try:
-            if "```json" in response:
-                json_text = response.split("```json")[1].split("```")[0]
-            else:
-                json_text = response
-
-            salary_data = json.loads(json_text.strip())
-
+        salary_data = self._parse_json_response(response)
+        if salary_data.get("_parse_failed"):
             return SalaryEstimation(
-                estimated_range_min=salary_data.get("estimated_range_min", 50000),
-                estimated_range_max=salary_data.get("estimated_range_max", 80000),
-                market_average=salary_data.get("market_average", 65000),
-                factors_affecting_salary=salary_data.get("factors_affecting_salary", []),
-                improvement_potential=salary_data.get(
-                    "improvement_potential", "Continue skill development"
-                ),
-            )
-
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse AI response for salary estimation")
-            return SalaryEstimation(
-                estimated_range_min=50000,
-                estimated_range_max=80000,
-                market_average=65000,
+                estimated_range_min=50000, estimated_range_max=80000, market_average=65000,
                 factors_affecting_salary=["Experience level", "Technical skills"],
                 improvement_potential="Develop additional skills and gain more experience",
             )
+
+        return SalaryEstimation(
+            estimated_range_min=salary_data.get("estimated_range_min", 50000),
+            estimated_range_max=salary_data.get("estimated_range_max", 80000),
+            market_average=salary_data.get("market_average", 65000),
+            factors_affecting_salary=salary_data.get("factors_affecting_salary", []),
+            improvement_potential=salary_data.get(
+                "improvement_potential", "Continue skill development"
+            ),
+        )
 
     def _generate_detailed_feedback(
         self, resume_text: str, job_description: str, match_score: MatchScore, skill_gap: SkillGap
