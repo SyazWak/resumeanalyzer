@@ -335,10 +335,10 @@ Respond with JSON only."""
                 elif stripped.startswith("•") or stripped.startswith("-") or stripped.startswith("–"):
                     pdf.set_font("Helvetica", "", 10)
                     pdf.cell(5)
-                    pdf.multi_cell(0, 6, stripped)
+                    pdf.multi_cell(0, 6, stripped, new_x="LMARGIN", new_y="NEXT")
                 else:
                     pdf.set_font("Helvetica", "", 10)
-                    pdf.multi_cell(0, 6, stripped)
+                    pdf.multi_cell(0, 6, stripped, new_x="LMARGIN", new_y="NEXT")
             
             pdf.output(filepath)
             logger.info(f"PDF exported to {filepath}")
