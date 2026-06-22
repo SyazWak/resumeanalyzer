@@ -119,7 +119,7 @@ class AdvancedAIAnalyzer:
         self.config = config or AnalysisConfig()
 
         # Override model with environment variable if available
-        env_model = os.getenv("DEEPSEEK_MODEL", "").strip()
+        env_model = os.getenv("AI_MODEL", os.getenv("DEEPSEEK_MODEL", "")).strip()
         if env_model:
             self.config.model = env_model
 

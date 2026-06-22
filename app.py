@@ -60,8 +60,8 @@ class EnhancedStreamlitApp:
     def run(self):
         """Main application runner."""
         # Header
-        st.title("🤖 AI-Enhanced Resume Analyzer")
-        st.markdown("*Intelligent resume analysis with advanced AI insights*")
+        st.title("AI Resume Analyzer")
+        st.markdown("*Upload your resume and a job description to get AI-powered insights*")
 
         # Sidebar configuration
         self.render_sidebar()
@@ -88,52 +88,50 @@ class EnhancedStreamlitApp:
 
     def render_sidebar(self):
         """Render the sidebar with configuration options."""
-        st.sidebar.title("⚙️ AI Configuration")
+        st.sidebar.title("⚙️ Configuration")
 
-        # AI settings
-        st.sidebar.subheader("🤖 AI Model Configuration")
-        if self.ai_available:
-            st.sidebar.success("✅ AI Analysis Ready")
+        # AI Model (collapsible)
+        with st.sidebar.expander("🤖 AI Model", expanded=True):
+            if self.ai_available:
+                primary_model = os.getenv("AI_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free"))
+                st.caption(f"**Model:** {primary_model}")
 
-            # Show primary model
-            primary_model = os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free")
-            st.sidebar.info(f"**Primary:** {primary_model}")
+                fallback_models = os.getenv("FALLBACK_MODELS", "")
+                if fallback_models:
+                    fallback_list = [m.strip() for m in fallback_models.split(",")]
+                    st.caption(f"**Fallbacks:** {len(fallback_list)} configured")
+            else:
+                st.error("AI unavailable — check API key")
 
-            # Show fallback models
-            fallback_models = os.getenv("FALLBACK_MODELS", "")
-            if fallback_models:
-                fallback_list = [model.strip() for model in fallback_models.split(",")]
-                st.sidebar.caption("**Fallback Models:**")
-                for i, model in enumerate(fallback_list[:3], 1):  # Show first 3
-                    st.sidebar.caption(f"  {i}. {model}")
-                if len(fallback_list) > 3:
-                    st.sidebar.caption(f"  +{len(fallback_list) - 3} more...")
+        # Analysis Context (collapsible)
+        with st.sidebar.expander("📋 Analysis Context", expanded=False):
+            st.session_state.location = st.text_input(
+                "Location (for salary estimation)",
+                placeholder="e.g., San Francisco, CA",
+            )
+            st.session_state.industry = st.selectbox(
+                "Industry",
+                ["", "Technology", "Finance", "Healthcare", "Marketing", "Engineering", "Other"],
+            )
 
-            st.sidebar.caption("💡 Automatically switches to fallback models when rate limited")
-        else:
-            st.sidebar.error("❌ AI Analysis Unavailable")
-            st.sidebar.warning("Please configure your OpenRouter API key")
+        # Analysis Settings (collapsible)
+        with st.sidebar.expander("🔧 Settings", expanded=False):
+            st.session_state.analysis_depth = st.selectbox(
+                "Analysis Depth",
+                ["Standard", "Comprehensive"],
+                index=0,
+            )
 
-        # Analysis context
-        st.sidebar.subheader("Analysis Context")
-        st.session_state.location = st.sidebar.text_input(
-            "Location (for salary estimation)", placeholder="e.g., San Francisco, CA"
-        )
-        st.session_state.industry = st.sidebar.selectbox(
-            "Industry",
-            ["", "Technology", "Finance", "Healthcare", "Marketing", "Engineering", "Other"],
-        )
+        st.sidebar.divider()
 
-        # Analysis settings
-        st.sidebar.subheader("Analysis Settings")
-        st.session_state.analysis_depth = st.sidebar.selectbox(
-            "Analysis Depth", ["Standard", "Comprehensive"], index=0
-        )
-
-        # Clear results button
-        if st.sidebar.button("🗑️ Clear Results"):
+        # Clear results
+        if st.sidebar.button("🗑️ Clear Results", use_container_width=True):
             self.clear_session_state()
             st.rerun()
+
+        # About
+        st.sidebar.caption("AI Resume Analyzer v2.1.0")
+        st.sidebar.caption("Powered by OpenRouter")
 
     def render_analysis_tab(self):
         """Render the main analysis tab."""
