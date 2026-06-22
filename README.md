@@ -1,6 +1,6 @@
-# 🤖 AI Resume Analyzer with DeepSeek
+# 🤖 AI Resume Analyzer
 
-An intelligent resume analysis system powered by DeepSeek AI that provides comprehensive insights for job applications.
+An intelligent resume analysis system powered by AI that provides comprehensive insights for job applications.
 
 ## ✨ Features
 
@@ -13,6 +13,9 @@ An intelligent resume analysis system powered by DeepSeek AI that provides compr
 - **Dual Interface**: Command line and web interface options
 - **Resume Rewrite**: AI-powered section-by-section improvement with diff view
 - **PDF & DOCX Export**: Download improved resume in professional formats
+- **Streamlit-native dark/light theme**: Automatic theme support via Streamlit's built-in settings
+- **Resilient AI analysis with fallback model support**: Automatic failover to alternative AI models
+- **Progress indicators during analysis**: Visual feedback with spinners and status updates
 
 ## 🚀 Quick Start
 
@@ -70,7 +73,7 @@ resumeanalyzer/
 ### Environment Variables (.env)
 ```bash
 OPENROUTER_API_KEY=your_api_key_here
-DEEPSEEK_MODEL=deepseek/deepseek-chat-v3-0324:free
+AI_MODEL=deepseek/deepseek-chat-v3-0324:free
 ```
 
 ### Command Line Options
@@ -109,6 +112,8 @@ Options:
 
 ## 🐛 Troubleshooting
 
+A built-in troubleshooting panel is available in the sidebar (click "Troubleshooting" expander) with common solutions.
+
 **AI Analysis Not Working**
 - Check your `.env` file has valid `OPENROUTER_API_KEY`
 - Verify OpenRouter account has credits
@@ -129,9 +134,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Copyright (c) 2025 SyazWak
 
-## �🙏 Acknowledgments
+## 🙏 Acknowledgments
 
-- **DeepSeek AI** for language model capabilities
 - **OpenRouter** for API infrastructure
 - **Streamlit** for web interface
 

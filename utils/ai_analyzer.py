@@ -2,7 +2,7 @@
 Advanced AI-Powered Resume Analyzer
 ===================================
 
-Uses DeepSeek API through OpenRouter for intelligent resume analysis.
+Uses AI models through OpenRouter for intelligent resume analysis.
 Provides comprehensive evaluation, skill gap analysis, ATS optimization,
 salary estimation, and personalized improvement recommendations.
 
@@ -156,9 +156,9 @@ class AdvancedAIAnalyzer:
         self.last_successful_model = self.config.model
 
         # Feature flags
-        self.enable_salary = os.getenv('ENABLE_SALARY_ESTIMATION', 'true').lower() == 'true'
-        self.enable_skill_gap = os.getenv('ENABLE_SKILL_GAP_ANALYSIS', 'true').lower() == 'true'
-        self.enable_ats = os.getenv('ENABLE_ATS_OPTIMIZATION', 'true').lower() == 'true'
+        self.enable_salary = os.getenv("ENABLE_SALARY_ESTIMATION", "true").lower() == "true"
+        self.enable_skill_gap = os.getenv("ENABLE_SKILL_GAP_ANALYSIS", "true").lower() == "true"
+        self.enable_ats = os.getenv("ENABLE_ATS_OPTIMIZATION", "true").lower() == "true"
 
     def analyze_resume_comprehensive(
         self,
@@ -185,9 +185,13 @@ class AdvancedAIAnalyzer:
         except Exception as e:
             logger.error(f"Match score analysis failed: {e}")
             match_score = MatchScore(
-                overall_score=50.0, technical_skills_score=50.0, experience_score=50.0,
-                education_score=50.0, soft_skills_score=50.0, ats_score=50.0,
-                explanation=f"Analysis error: {str(e)}"
+                overall_score=50.0,
+                technical_skills_score=50.0,
+                experience_score=50.0,
+                education_score=50.0,
+                soft_skills_score=50.0,
+                ats_score=50.0,
+                explanation=f"Analysis error: {str(e)}",
             )
 
         # Skill gap analysis (optional via feature flag)
@@ -205,8 +209,11 @@ class AdvancedAIAnalyzer:
 
         # ATS optimization (optional via feature flag)
         ats_optimization = ATSOptimization(
-            ats_score=70.0, keyword_density_score=70.0, format_score=80.0,
-            missing_ats_keywords=[], formatting_improvements=["Analysis disabled or failed"],
+            ats_score=70.0,
+            keyword_density_score=70.0,
+            format_score=80.0,
+            missing_ats_keywords=[],
+            formatting_improvements=["Analysis disabled or failed"],
             keyword_suggestions=[],
         )
         if self.enable_ats:
@@ -235,9 +242,7 @@ class AdvancedAIAnalyzer:
             detailed_feedback = {"message": f"Feedback generation failed: {str(e)}"}
 
         # Create improvement plan (uses already-computed data)
-        improvement_plan = self._create_improvement_plan(
-            match_score, skill_gap, ats_optimization
-        )
+        improvement_plan = self._create_improvement_plan(match_score, skill_gap, ats_optimization)
 
         # Generate next steps
         next_steps = self._generate_next_steps(improvement_plan, skill_gap)
@@ -392,8 +397,8 @@ class AdvancedAIAnalyzer:
 
         # Strategy 3: Find first { and last }
         try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
+            start = response.find("{")
+            end = response.rfind("}") + 1
             if start != -1 and end > start:
                 return json.loads(response[start:end])
         except (json.JSONDecodeError, ValueError):
@@ -402,9 +407,10 @@ class AdvancedAIAnalyzer:
         # Strategy 4: Clean common issues (trailing commas)
         try:
             import re
-            cleaned = re.sub(r',\s*([}\]])', r'\1', response)
-            start = cleaned.find('{')
-            end = cleaned.rfind('}') + 1
+
+            cleaned = re.sub(r",\s*([}\]])", r"\1", response)
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
             if start != -1 and end > start:
                 return json.loads(cleaned[start:end])
         except (json.JSONDecodeError, ValueError):
@@ -462,9 +468,13 @@ Respond with JSON only."""
         score_data = self._parse_json_response(response)
         if score_data.get("_parse_failed"):
             return MatchScore(
-                overall_score=50.0, technical_skills_score=50.0, experience_score=50.0,
-                education_score=50.0, soft_skills_score=50.0, ats_score=50.0,
-                explanation=score_data.get("explanation", "Analysis completed")
+                overall_score=50.0,
+                technical_skills_score=50.0,
+                experience_score=50.0,
+                education_score=50.0,
+                soft_skills_score=50.0,
+                ats_score=50.0,
+                explanation=score_data.get("explanation", "Analysis completed"),
             )
 
         return MatchScore(
@@ -557,8 +567,11 @@ Respond with JSON only."""
         ats_data = self._parse_json_response(response)
         if ats_data.get("_parse_failed"):
             return ATSOptimization(
-                ats_score=75.0, keyword_density_score=70.0, format_score=80.0,
-                missing_ats_keywords=[], formatting_improvements=["Review ATS compatibility"],
+                ats_score=75.0,
+                keyword_density_score=70.0,
+                format_score=80.0,
+                missing_ats_keywords=[],
+                formatting_improvements=["Review ATS compatibility"],
                 keyword_suggestions=["Add job-relevant keywords"],
             )
 
@@ -607,7 +620,9 @@ Respond with JSON only."""
         salary_data = self._parse_json_response(response)
         if salary_data.get("_parse_failed"):
             return SalaryEstimation(
-                estimated_range_min=50000, estimated_range_max=80000, market_average=65000,
+                estimated_range_min=50000,
+                estimated_range_max=80000,
+                market_average=65000,
                 factors_affecting_salary=["Experience level", "Technical skills"],
                 improvement_potential="Develop additional skills and gain more experience",
             )
