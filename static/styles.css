@@ -1,0 +1,212 @@
+/* Global theme variables */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #000000;
+    --secondary-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --accent-color: #2196F3;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --ai-insight-bg: #f0f8ff;
+    --skill-gap-bg: #fff3cd;
+    --recommendation-bg: #d4edda;
+    --card-bg: #ffffff;
+    --shadow: rgba(0,0,0,0.1);
+}
+
+/* Main app styling */
+.stApp {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Sidebar styling */
+.css-1d391kg {
+    background-color: var(--secondary-bg) !important;
+}
+
+/* Main content area */
+.main > div {
+    padding-top: 2rem;
+    background-color: var(--bg-color) !important;
+}
+
+/* Metric containers */
+.metric-container {
+    background: linear-gradient(90deg, var(--success-color), var(--accent-color));
+    padding: 1rem;
+    border-radius: 10px;
+    color: white;
+    margin: 0.5rem 0;
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+/* AI insight boxes */
+.ai-insight {
+    background: var(--ai-insight-bg) !important;
+    border-left: 4px solid var(--accent-color);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 5px;
+    color: var(--text-color) !important;
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+/* Skill gap boxes */
+.skill-gap {
+    background: var(--skill-gap-bg) !important;
+    border-left: 4px solid var(--warning-color);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 5px;
+    color: var(--text-color) !important;
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+/* Recommendation boxes */
+.recommendation {
+    background: var(--recommendation-bg) !important;
+    border-left: 4px solid var(--success-color);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 5px;
+    color: var(--text-color) !important;
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+/* Cards and containers */
+.stContainer, .stColumn {
+    background-color: var(--bg-color) !important;
+}
+
+/* Text elements */
+.stMarkdown, .stText, .stWrite {
+    color: var(--text-color) !important;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color) !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: var(--accent-color) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 5px !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.stButton > button:hover {
+    background-color: var(--success-color) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 8px var(--shadow) !important;
+}
+
+/* File uploader */
+.stFileUploader {
+    background-color: var(--card-bg) !important;
+    border: 2px dashed var(--border-color) !important;
+    border-radius: 10px !important;
+    padding: 1rem !important;
+}
+
+/* Text areas */
+.stTextArea textarea {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 5px !important;
+}
+
+/* Select boxes */
+.stSelectbox select {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Alerts */
+.stAlert {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 5px !important;
+}
+
+/* Success messages */
+.stSuccess {
+    background-color: var(--success-color)20 !important;
+    border-left: 4px solid var(--success-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Error messages */
+.stError {
+    background-color: var(--danger-color)20 !important;
+    border-left: 4px solid var(--danger-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Warning messages */
+.stWarning {
+    background-color: var(--warning-color)20 !important;
+    border-left: 4px solid var(--warning-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Info messages */
+.stInfo {
+    background-color: var(--accent-color)20 !important;
+    border-left: 4px solid var(--accent-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: var(--accent-color) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 50px !important;
+    height: 50px !important;
+    font-size: 20px !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 10px var(--shadow) !important;
+    transition: all 0.3s ease !important;
+}
+
+.theme-toggle:hover {
+    background: var(--success-color) !important;
+    transform: scale(1.1) !important;
+}
+
+/* Plotly charts theme adjustment */
+.js-plotly-plot {
+    background-color: var(--bg-color) !important;
+}
+
+/* Code blocks */
+.stCode {
+    background-color: var(--secondary-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+.streamlit-expanderContent {
+    background-color: var(--secondary-bg) !important;
+    color: var(--text-color) !important;
+}

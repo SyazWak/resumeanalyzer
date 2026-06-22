@@ -126,264 +126,29 @@ themes = {
 
 current_theme = themes[st.session_state.theme]
 
-# Custom CSS with theme support
+# Load CSS from file
+css_path = project_root / "static" / "styles.css"
+if css_path.exists():
+    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+
+# Inject theme variables
 st.markdown(f"""
 <style>
-    /* Global theme variables */
-    :root {{
-        --bg-color: {current_theme['bg_color']};
-        --text-color: {current_theme['text_color']};
-        --secondary-bg: {current_theme['secondary_bg']};
-        --border-color: {current_theme['border_color']};
-        --accent-color: {current_theme['accent_color']};
-        --success-color: {current_theme['success_color']};
-        --warning-color: {current_theme['warning_color']};
-        --danger-color: {current_theme['danger_color']};
-        --card-bg: {current_theme['card_bg']};
-        --shadow: {current_theme['shadow']};
-    }}
-    
-    /* Auto-detect Streamlit theme */
-    <script>
-    function updateThemeFromStreamlit() {{
-        // Check Streamlit's current theme by examining the body or main app background
-        const stApp = document.querySelector('.stApp');
-        if (stApp) {{
-            const styles = window.getComputedStyle(stApp);
-            const bgColor = styles.backgroundColor;
-            
-            // Parse RGB values
-            const rgb = bgColor.match(/\\d+/g);
-            if (rgb) {{
-                const [r, g, b] = rgb.map(Number);
-                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                
-                // Determine if we're in dark mode
-                const isDark = brightness < 128;
-                const currentTheme = isDark ? 'dark' : 'light';
-                
-                // Store in sessionStorage for Python to read
-                sessionStorage.setItem('streamlit_detected_theme', currentTheme);
-                
-                // Also set a data attribute for CSS targeting
-                document.documentElement.setAttribute('data-streamlit-theme', currentTheme);
-            }}
-        }}
-        
-        // Also check system preference as fallback
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (!sessionStorage.getItem('streamlit_detected_theme')) {{
-            sessionStorage.setItem('streamlit_detected_theme', systemPrefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-streamlit-theme', systemPrefersDark ? 'dark' : 'light');
-        }}
-    }}
-    
-    // Run detection when DOM is ready
-    if (document.readyState === 'loading') {{
-        document.addEventListener('DOMContentLoaded', updateThemeFromStreamlit);
-    }} else {{
-        updateThemeFromStreamlit();
-    }}
-    
-    // Also run periodically to catch theme changes
-    setInterval(updateThemeFromStreamlit, 1000);
-    </script>
-    
-    /* Main app styling */
-    .stApp {{
-        background-color: {current_theme['bg_color']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Sidebar styling */
-    .css-1d391kg {{
-        background-color: {current_theme['secondary_bg']} !important;
-    }}
-    
-    /* Main content area */
-    .main > div {{
-        padding-top: 2rem;
-        background-color: {current_theme['bg_color']} !important;
-    }}
-    
-    /* Metric containers */
-    .metric-container {{
-        background: linear-gradient(90deg, {current_theme['success_color']}, {current_theme['accent_color']});
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        margin: 0.5rem 0;
-        box-shadow: 0 2px 4px {current_theme['shadow']};
-    }}
-    
-    /* AI insight boxes */
-    .ai-insight {{
-        background: {current_theme['ai_insight_bg']} !important;
-        border-left: 4px solid {current_theme['accent_color']};
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 5px;
-        color: {current_theme['text_color']} !important;
-        box-shadow: 0 2px 4px {current_theme['shadow']};
-    }}
-    
-    /* Skill gap boxes */
-    .skill-gap {{
-        background: {current_theme['skill_gap_bg']} !important;
-        border-left: 4px solid {current_theme['warning_color']};
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 5px;
-        color: {current_theme['text_color']} !important;
-        box-shadow: 0 2px 4px {current_theme['shadow']};
-    }}
-    
-    /* Recommendation boxes */
-    .recommendation {{
-        background: {current_theme['recommendation_bg']} !important;
-        border-left: 4px solid {current_theme['success_color']};
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 5px;
-        color: {current_theme['text_color']} !important;
-        box-shadow: 0 2px 4px {current_theme['shadow']};
-    }}
-    
-    /* Cards and containers */
-    .stContainer, .stColumn {{
-        background-color: {current_theme['bg_color']} !important;
-    }}
-    
-    /* Text elements */
-    .stMarkdown, .stText, .stWrite {{
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Headers */
-    h1, h2, h3, h4, h5, h6 {{
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Buttons */
-    .stButton > button {{
-        background-color: {current_theme['accent_color']} !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 5px !important;
-        padding: 0.5rem 1rem !important;
-        transition: all 0.3s ease !important;
-    }}
-    
-    .stButton > button:hover {{
-        background-color: {current_theme['success_color']} !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 8px {current_theme['shadow']} !important;
-    }}
-    
-    /* File uploader */
-    .stFileUploader {{
-        background-color: {current_theme['card_bg']} !important;
-        border: 2px dashed {current_theme['border_color']} !important;
-        border-radius: 10px !important;
-        padding: 1rem !important;
-    }}
-    
-    /* Text areas */
-    .stTextArea textarea {{
-        background-color: {current_theme['card_bg']} !important;
-        color: {current_theme['text_color']} !important;
-        border: 1px solid {current_theme['border_color']} !important;
-        border-radius: 5px !important;
-    }}
-    
-    /* Select boxes */
-    .stSelectbox select {{
-        background-color: {current_theme['card_bg']} !important;
-        color: {current_theme['text_color']} !important;
-        border: 1px solid {current_theme['border_color']} !important;
-    }}
-    
-    /* Alerts */
-    .stAlert {{
-        background-color: {current_theme['card_bg']} !important;
-        color: {current_theme['text_color']} !important;
-        border: 1px solid {current_theme['border_color']} !important;
-        border-radius: 5px !important;
-    }}
-    
-    /* Success messages */
-    .stSuccess {{
-        background-color: {current_theme['success_color']}20 !important;
-        border-left: 4px solid {current_theme['success_color']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Error messages */
-    .stError {{
-        background-color: {current_theme['danger_color']}20 !important;
-        border-left: 4px solid {current_theme['danger_color']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Warning messages */
-    .stWarning {{
-        background-color: {current_theme['warning_color']}20 !important;
-        border-left: 4px solid {current_theme['warning_color']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Info messages */
-    .stInfo {{
-        background-color: {current_theme['accent_color']}20 !important;
-        border-left: 4px solid {current_theme['accent_color']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    /* Theme toggle button */
-    .theme-toggle {{
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        background: {current_theme['accent_color']} !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50% !important;
-        width: 50px !important;
-        height: 50px !important;
-        font-size: 20px !important;
-        cursor: pointer !important;
-        box-shadow: 0 2px 10px {current_theme['shadow']} !important;
-        transition: all 0.3s ease !important;
-    }}
-    
-    .theme-toggle:hover {{
-        background: {current_theme['success_color']} !important;
-        transform: scale(1.1) !important;
-    }}
-    
-    /* Plotly charts theme adjustment */
-    .js-plotly-plot {{
-        background-color: {current_theme['bg_color']} !important;
-    }}
-    
-    /* Code blocks */
-    .stCode {{
-        background-color: {current_theme['secondary_bg']} !important;
-        color: {current_theme['text_color']} !important;
-        border: 1px solid {current_theme['border_color']} !important;
-    }}
-    
-    /* Expander */
-    .streamlit-expanderHeader {{
-        background-color: {current_theme['card_bg']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
-    
-    .streamlit-expanderContent {{
-        background-color: {current_theme['secondary_bg']} !important;
-        color: {current_theme['text_color']} !important;
-    }}
+:root {{
+    --bg-color: {current_theme['bg_color']};
+    --text-color: {current_theme['text_color']};
+    --secondary-bg: {current_theme['secondary_bg']};
+    --border-color: {current_theme['border_color']};
+    --accent-color: {current_theme['accent_color']};
+    --success-color: {current_theme['success_color']};
+    --warning-color: {current_theme['warning_color']};
+    --danger-color: {current_theme['danger_color']};
+    --ai-insight-bg: {current_theme['ai_insight_bg']};
+    --skill-gap-bg: {current_theme['skill_gap_bg']};
+    --recommendation-bg: {current_theme['recommendation_bg']};
+    --card-bg: {current_theme['card_bg']};
+    --shadow: {current_theme['shadow']};
+}}
 </style>
 """, unsafe_allow_html=True)
 
