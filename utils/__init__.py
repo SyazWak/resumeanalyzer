@@ -24,17 +24,12 @@ __author__ = "AI Resume Analyzer"
 
 # Import main utility classes for easy access
 try:
-    from .text_extractor import TextExtractor
     from .ai_analyzer import AdvancedAIAnalyzer
-    from .visualizer import ReportVisualizer
     from .resume_writer import ResumeWriter
-    
-    __all__ = [
-        "TextExtractor",
-        "AdvancedAIAnalyzer",
-        "ReportVisualizer",
-        "ResumeWriter"
-    ]
+    from .text_extractor import TextExtractor
+    from .visualizer import ReportVisualizer
+
+    __all__ = ["TextExtractor", "AdvancedAIAnalyzer", "ReportVisualizer", "ResumeWriter"]
 except ImportError as e:
     # Handle missing dependencies gracefully
     __all__ = []

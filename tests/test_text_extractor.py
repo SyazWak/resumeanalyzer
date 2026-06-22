@@ -1,9 +1,7 @@
 """Tests for TextExtractor module."""
 
-import os
-import tempfile
 import pytest
-from pathlib import Path
+
 from utils.text_extractor import TextExtractor
 
 

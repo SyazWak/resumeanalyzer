@@ -1,19 +1,16 @@
 """Tests for AdvancedAIAnalyzer module."""
 
-import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from utils.ai_analyzer import AdvancedAIAnalyzer, AnalysisConfig
 
 
 @pytest.fixture
 def config():
     """Create a test configuration."""
-    return AnalysisConfig(
-        model="test-model",
-        temperature=0.5,
-        max_tokens=1000
-    )
+    return AnalysisConfig(model="test-model", temperature=0.5, max_tokens=1000)
 
 
 @pytest.fixture
@@ -45,9 +42,7 @@ class TestMakeApiRequest:
     def test_successful_request(self, mock_post, analyzer):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "test response"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "test response"}}]}
         mock_post.return_value = mock_response
 
         result = analyzer._make_api_request("test prompt")
