@@ -11,6 +11,8 @@ An intelligent resume analysis system powered by DeepSeek AI that provides compr
 - **Personalized Feedback**: Detailed improvement suggestions and next steps
 - **Multi-Format Support**: Upload PDFs, TXT, or DOCX files
 - **Dual Interface**: Command line and web interface options
+- **Resume Rewrite**: AI-powered section-by-section improvement with diff view
+- **PDF & DOCX Export**: Download improved resume in professional formats
 
 ## 🚀 Quick Start
 
@@ -40,16 +42,25 @@ streamlit run app.py
 python main.py --resume resume.pdf --job_description job.txt
 ```
 
+### 4. Resume Rewrite (after analysis)
+- Click "Rewrite Resume" tab in the web interface
+- Or use the CLI with `--resume` flag
+
 ## 📁 Project Structure
 
 ```
 resumeanalyzer/
 ├── main.py                    # CLI application
-├── app.py                     # Web interface  
+├── app.py                     # Web interface (Streamlit)
 ├── utils/
 │   ├── ai_analyzer.py         # AI analysis engine
 │   ├── text_extractor.py      # File text extraction
-│   └── visualizer.py          # Charts and reports
+│   ├── visualizer.py          # Charts and reports
+│   └── resume_writer.py       # Resume rewrite and export
+├── static/
+│   └── styles.css             # Theme CSS
+├── tests/                     # Unit tests
+├── pyproject.toml             # Project config
 ├── requirements.txt           # Dependencies
 └── README.md
 ```
