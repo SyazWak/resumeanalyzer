@@ -129,6 +129,24 @@ class EnhancedStreamlitApp:
             self.clear_session_state()
             st.rerun()
 
+        # Troubleshooting
+        with st.sidebar.expander("🔧 Troubleshooting", expanded=False):
+            st.markdown("""
+            **AI Analysis Not Working**
+            - Check `.env` has valid `OPENROUTER_API_KEY`
+            - Verify OpenRouter account has credits
+            - Check internet connectivity
+            
+            **PDF Extraction Fails**
+            - Ensure PDF is not password-protected
+            - Try using text input instead
+            
+            **Installation Issues**
+            - Run `pip install -r requirements.txt`
+            - Ensure virtual environment is activated
+            - Check Python version (3.8+)
+            """)
+
         # About
         st.sidebar.caption("AI Resume Analyzer v2.1.0")
         st.sidebar.caption("Powered by OpenRouter")
@@ -652,6 +670,21 @@ class EnhancedStreamlitApp:
                     "Accept this change", value=section.accepted, key=f"accept_{i}"
                 )
 
+                # Retry button for failed sections
+                if not section.accepted and "failed" in section.explanation.lower():
+                    if st.button(f"🔄 Retry {section.section_name}", key=f"retry_{i}"):
+                        with st.spinner(f"Retrying {section.section_name}..."):
+                            writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
+                            new_result = writer._rewrite_section(
+                                section.section_name,
+                                section.original_text,
+                                st.session_state.job_text,
+                                result.metadata.get('missing_skills', []),
+                                result.metadata.get('priority_skills', [])
+                            )
+                            result.sections[i] = new_result
+                            st.rerun()
+
         st.markdown("---")
 
         # Generate final version
@@ -811,7 +844,7 @@ class EnhancedStreamlitApp:
             )
             return
 
-        with st.spinner("🤖 Performing AI-powered analysis..."):
+        with st.status("🔄 Analyzing resume...", expanded=True) as status:
             try:
                 # Prepare context
                 context = {}
@@ -820,11 +853,13 @@ class EnhancedStreamlitApp:
                 if hasattr(st.session_state, "industry") and st.session_state.industry:
                     context["industry"] = st.session_state.industry
 
+                st.write("🤖 Running AI analysis...")
                 # AI analysis only
                 ai_results = self.perform_ai_analysis(
                     st.session_state.resume_text, st.session_state.job_text, context
                 )
 
+                st.write("✨ Compiling results...")
                 # Store results
                 st.session_state.analysis_results = {
                     "metadata": {"ai_enhanced": True, "context": context},
@@ -832,7 +867,7 @@ class EnhancedStreamlitApp:
                     "summary": self.create_analysis_summary(ai_results),
                 }
 
-                st.success("✅ AI analysis completed successfully!")
+                status.update(label="✅ Analysis complete!", state="complete")
 
             except Exception as e:
                 st.error(f"❌ Analysis failed: {str(e)}")
