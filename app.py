@@ -34,128 +34,10 @@ st.set_page_config(
 )
 
 
-# Auto-detect Streamlit theme
-@st.cache_data
-def get_system_theme():
-    """Get system theme preference with multiple detection methods."""
-
-    # Method 1: Check URL parameters for explicit theme setting
-    try:
-        query_params = st.query_params
-        if "theme" in query_params:
-            theme = str(query_params["theme"]).lower()
-            if theme in ["dark", "light"]:
-                return theme
-    except Exception:
-        pass
-
-    # Method 2: Try to detect from browser/system (limited in Streamlit)
-    # This is a placeholder for more advanced detection
-
-    # Method 3: Default to light mode
-    # The JavaScript detection will help users see the right theme,
-    # and they can always override in the sidebar
-    return "light"
-
-
-def sync_with_streamlit_theme():
-    """Sync our theme with user preferences and system detection."""
-
-    # Priority 1: Manual user override in sidebar
-    if "manual_theme" in st.session_state:
-        if st.session_state.theme != st.session_state.manual_theme:
-            st.session_state.theme = st.session_state.manual_theme
-        return
-
-    # Priority 2: URL parameter override
-    try:
-        query_params = st.query_params
-        if "theme" in query_params:
-            url_theme = str(query_params["theme"]).lower()
-            if url_theme in ["dark", "light"] and st.session_state.theme != url_theme:
-                st.session_state.theme = url_theme
-                return
-    except Exception:
-        pass
-
-    # Priority 3: Auto-detection (system preference)
-    detected_theme = get_system_theme()
-    if st.session_state.get("theme") != detected_theme:
-        st.session_state.theme = detected_theme
-
-
-# Initialize theme
-if "theme" not in st.session_state:
-    st.session_state.theme = get_system_theme()
-
-# Sync theme preferences
-sync_with_streamlit_theme()
-
 # Load CSS from file
 css_path = project_root / "static" / "styles.css"
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
-
-# Theme configurations
-themes = {
-    "light": {
-        "bg_color": "#ffffff",
-        "text_color": "#000000",
-        "secondary_bg": "#f8f9fa",
-        "border_color": "#dee2e6",
-        "accent_color": "#2196F3",
-        "success_color": "#28a745",
-        "warning_color": "#ffc107",
-        "danger_color": "#dc3545",
-        "ai_insight_bg": "#f0f8ff",
-        "skill_gap_bg": "#fff3cd",
-        "recommendation_bg": "#d4edda",
-        "card_bg": "#ffffff",
-        "shadow": "rgba(0,0,0,0.1)",
-    },
-    "dark": {
-        "bg_color": "#0e1117",
-        "text_color": "#ffffff",
-        "secondary_bg": "#262730",
-        "border_color": "#464853",
-        "accent_color": "#4dabf7",
-        "success_color": "#51cf66",
-        "warning_color": "#ffd43b",
-        "danger_color": "#ff6b6b",
-        "ai_insight_bg": "#1a2332",
-        "skill_gap_bg": "#2d2a1f",
-        "recommendation_bg": "#1f2d1f",
-        "card_bg": "#262730",
-        "shadow": "rgba(0,0,0,0.3)",
-    },
-}
-
-current_theme = themes[st.session_state.theme]
-
-# Inject theme variables
-st.markdown(
-    f"""
-<style>
-:root {{
-    --bg-color: {current_theme["bg_color"]};
-    --text-color: {current_theme["text_color"]};
-    --secondary-bg: {current_theme["secondary_bg"]};
-    --border-color: {current_theme["border_color"]};
-    --accent-color: {current_theme["accent_color"]};
-    --success-color: {current_theme["success_color"]};
-    --warning-color: {current_theme["warning_color"]};
-    --danger-color: {current_theme["danger_color"]};
-    --ai-insight-bg: {current_theme["ai_insight_bg"]};
-    --skill-gap-bg: {current_theme["skill_gap_bg"]};
-    --recommendation-bg: {current_theme["recommendation_bg"]};
-    --card-bg: {current_theme["card_bg"]};
-    --shadow: {current_theme["shadow"]};
-}}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
 
 class EnhancedStreamlitApp:
     """Enhanced Streamlit application with AI capabilities."""
@@ -163,7 +45,7 @@ class EnhancedStreamlitApp:
     def __init__(self):
         """Initialize the application components."""
         self.text_extractor = TextExtractor()
-        self.visualizer = ReportVisualizer(theme=st.session_state.theme)
+        self.visualizer = ReportVisualizer()
 
         # Initialize AI analyzer
         self.ai_analyzer = None
@@ -207,59 +89,6 @@ class EnhancedStreamlitApp:
     def render_sidebar(self):
         """Render the sidebar with configuration options."""
         st.sidebar.title("⚙️ AI Configuration")
-
-        # Theme settings
-        st.sidebar.subheader("🎨 Theme Settings")
-
-        # Show current theme status
-        current_theme_display = (
-            "🌙 Dark Mode" if st.session_state.theme == "dark" else "☀️ Light Mode"
-        )
-        st.sidebar.info(f"**Current Theme:** {current_theme_display}")
-
-        # Theme selection
-        theme_options = {
-            "Auto (System Preference)": "auto",
-            "☀️ Light Mode": "light",
-            "🌙 Dark Mode": "dark",
-        }
-
-        # Determine current selection
-        if "manual_theme" not in st.session_state:
-            current_selection = "Auto (System Preference)"
-        else:
-            manual = st.session_state.manual_theme
-            current_selection = "☀️ Light Mode" if manual == "light" else "🌙 Dark Mode"
-
-        selected_theme = st.sidebar.selectbox(
-            "Theme Preference:",
-            options=list(theme_options.keys()),
-            index=list(theme_options.keys()).index(current_selection),
-            help="Choose your preferred theme. Auto mode follows your system/browser preference.",
-        )
-
-        # Apply theme selection
-        selected_value = theme_options[selected_theme]
-
-        if selected_value == "auto":
-            # Remove manual override
-            if "manual_theme" in st.session_state:
-                del st.session_state.manual_theme
-                st.rerun()
-        else:
-            # Set manual theme
-            if st.session_state.get("manual_theme") != selected_value:
-                st.session_state.manual_theme = selected_value
-                st.session_state.theme = selected_value
-                st.rerun()
-
-        # Add helpful info
-        if selected_theme == "Auto (System Preference)":
-            st.sidebar.caption(
-                "💡 Theme automatically matches your system/browser dark mode setting"
-            )
-
-        st.sidebar.divider()
 
         # AI settings
         st.sidebar.subheader("🤖 AI Model Configuration")
