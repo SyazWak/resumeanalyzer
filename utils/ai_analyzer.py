@@ -329,21 +329,20 @@ class AdvancedAIAnalyzer:
     
     def _analyze_match_score(self, resume_text: str, job_description: str) -> MatchScore:
         """Analyze detailed match score using AI."""
-        system_prompt = """You are an expert HR recruiter and resume analyst. Analyze the resume against the job description and provide detailed scoring.
+        system_prompt = """You are an expert HR recruiter and resume analyst. You MUST respond with valid JSON only — no markdown, no explanation text, no code fences.
 
-Return your analysis as valid JSON with this exact structure:
+Return a JSON object with this exact structure:
 {
-  "overall_score": float (0-100),
-  "technical_skills_score": float (0-100),
-  "experience_score": float (0-100),
-  "education_score": float (0-100),
-  "soft_skills_score": float (0-100),
-  "ats_score": float (0-100),
-  "explanation": "detailed explanation of scoring rationale"
+  "overall_score": <number 0-100>,
+  "technical_skills_score": <number 0-100>,
+  "experience_score": <number 0-100>,
+  "education_score": <number 0-100>,
+  "soft_skills_score": <number 0-100>,
+  "ats_score": <number 0-100>,
+  "explanation": "<string: 2-3 sentence scoring rationale>"
 }"""
-        
-        prompt = f"""
-Analyze this resume against the job description and provide detailed match scoring:
+
+        prompt = f"""Analyze this resume against the job description. Score each category 0-100.
 
 RESUME:
 {resume_text[:3000]}
@@ -351,15 +350,8 @@ RESUME:
 JOB DESCRIPTION:
 {job_description[:2000]}
 
-Provide detailed scoring breakdown considering:
-1. Technical skills alignment
-2. Experience relevance and level
-3. Educational background match
-4. Soft skills demonstration
-5. ATS compatibility and keyword presence
-
-Be thorough but fair in your assessment. Consider transferable skills and potential.
-"""
+Score each category fairly. Consider transferable skills and potential.
+Respond with JSON only."""
         
         response = self._make_api_request(prompt, system_prompt)
         
@@ -396,18 +388,17 @@ Be thorough but fair in your assessment. Consider transferable skills and potent
     
     def _analyze_skill_gap(self, resume_text: str, job_description: str) -> SkillGap:
         """Analyze skill gaps using AI."""
-        system_prompt = """You are a career development expert. Analyze skill gaps between the resume and job requirements.
+        system_prompt = """You are a career development expert. You MUST respond with valid JSON only — no markdown, no explanation text, no code fences.
 
-Return your analysis as valid JSON with this exact structure:
+Return a JSON object with this exact structure:
 {
-  "missing_skills": ["skill1", "skill2", ...],
-  "skill_level_gaps": {"skill": "gap description", ...},
-  "recommended_learning_path": ["step1", "step2", ...],
-  "priority_skills": ["skill1", "skill2", ...]
+  "missing_skills": ["skill1", "skill2"],
+  "skill_level_gaps": {"skill_name": "gap description"},
+  "recommended_learning_path": ["step1", "step2"],
+  "priority_skills": ["skill1", "skill2"]
 }"""
-        
-        prompt = f"""
-Analyze the skill gaps between this resume and job description:
+
+        prompt = f"""Analyze skill gaps between this resume and job description.
 
 RESUME:
 {resume_text[:3000]}
@@ -415,14 +406,8 @@ RESUME:
 JOB DESCRIPTION:
 {job_description[:2000]}
 
-Identify:
-1. Missing technical and soft skills
-2. Skills present but at insufficient level
-3. Recommended learning path with specific resources
-4. Priority skills to focus on first
-
-Provide actionable, specific recommendations.
-"""
+Identify missing skills, skill level gaps, learning path, and priorities.
+Respond with JSON only."""
         
         response = self._make_api_request(prompt, system_prompt)
         
@@ -452,20 +437,19 @@ Provide actionable, specific recommendations.
     
     def _analyze_ats_optimization(self, resume_text: str, job_description: str) -> ATSOptimization:
         """Analyze ATS optimization opportunities."""
-        system_prompt = """You are an ATS (Applicant Tracking System) optimization expert. Analyze how well the resume will perform in automated screening systems.
+        system_prompt = """You are an ATS (Applicant Tracking System) optimization expert. You MUST respond with valid JSON only — no markdown, no explanation text, no code fences.
 
-Return your analysis as valid JSON with this exact structure:
+Return a JSON object with this exact structure:
 {
-  "ats_score": float (0-100),
-  "keyword_density_score": float (0-100),
-  "format_score": float (0-100),
-  "missing_ats_keywords": ["keyword1", "keyword2", ...],
-  "formatting_improvements": ["improvement1", "improvement2", ...],
-  "keyword_suggestions": ["suggestion1", "suggestion2", ...]
+  "ats_score": <number 0-100>,
+  "keyword_density_score": <number 0-100>,
+  "format_score": <number 0-100>,
+  "missing_ats_keywords": ["keyword1", "keyword2"],
+  "formatting_improvements": ["improvement1", "improvement2"],
+  "keyword_suggestions": ["suggestion1", "suggestion2"]
 }"""
-        
-        prompt = f"""
-Analyze this resume for ATS optimization against the job description:
+
+        prompt = f"""Analyze this resume for ATS optimization against the job description.
 
 RESUME:
 {resume_text[:3000]}
@@ -473,16 +457,8 @@ RESUME:
 JOB DESCRIPTION:
 {job_description[:2000]}
 
-Evaluate:
-1. ATS compatibility score
-2. Keyword density and relevance
-3. Format optimization for parsing
-4. Missing critical keywords from job description
-5. Specific formatting improvements needed
-6. Strategic keyword placement suggestions
-
-Focus on making the resume ATS-friendly while maintaining readability.
-"""
+Evaluate ATS compatibility, keyword density, format, and missing keywords.
+Respond with JSON only."""
         
         response = self._make_api_request(prompt, system_prompt)
         
@@ -519,22 +495,21 @@ Focus on making the resume ATS-friendly while maintaining readability.
                         job_description: str, 
                         context: Optional[Dict[str, Any]] = None) -> SalaryEstimation:
         """Estimate salary range based on resume and job requirements."""
-        system_prompt = """You are a compensation analyst. Estimate salary ranges based on the candidate's profile and job requirements.
+        system_prompt = """You are a compensation analyst. You MUST respond with valid JSON only — no markdown, no explanation text, no code fences.
 
-Return your analysis as valid JSON with this exact structure:
+Return a JSON object with this exact structure:
 {
-  "estimated_range_min": float,
-  "estimated_range_max": float,
-  "market_average": float,
-  "factors_affecting_salary": ["factor1", "factor2", ...],
-  "improvement_potential": "description of how to increase earning potential"
+  "estimated_range_min": <number in USD>,
+  "estimated_range_max": <number in USD>,
+  "market_average": <number in USD>,
+  "factors_affecting_salary": ["factor1", "factor2"],
+  "improvement_potential": "<string: how to increase earning potential>"
 }"""
-        
+
         location = context.get('location', 'General') if context else 'General'
         industry = context.get('industry', 'Technology') if context else 'Technology'
-        
-        prompt = f"""
-Estimate salary range for this candidate profile:
+
+        prompt = f"""Estimate salary for this candidate profile.
 
 RESUME:
 {resume_text[:2000]}
@@ -542,19 +517,10 @@ RESUME:
 JOB DESCRIPTION:
 {job_description[:1500]}
 
-CONTEXT:
-Location: {location}
-Industry: {industry}
+CONTEXT: Location: {location}, Industry: {industry}
 
-Provide realistic salary estimates considering:
-1. Candidate's experience level and skills
-2. Job requirements and responsibilities
-3. Industry standards and location
-4. Market demand for these skills
-5. Growth potential
-
-Provide amounts in USD annually.
-"""
+Provide realistic USD annual salary estimates.
+Respond with JSON only."""
         
         response = self._make_api_request(prompt, system_prompt)
         
@@ -590,18 +556,9 @@ Provide amounts in USD annually.
                                   match_score: MatchScore,
                                   skill_gap: SkillGap) -> Dict[str, Any]:
         """Generate detailed feedback using AI."""
-        system_prompt = """You are an expert career coach and resume analyst. Provide detailed, actionable feedback in a clear, well-structured format.
+        system_prompt = """You are an expert career coach and resume analyst. Provide detailed, actionable feedback using markdown formatting with clear section headers (##), bullet points, and bold text for emphasis."""
 
-Use proper markdown formatting with:
-- Clear section headers (##)
-- Bullet points for lists
-- **Bold** for emphasis
-- Specific, actionable recommendations
-
-Return structured feedback that is easy to read and implement."""
-        
-        prompt = f"""
-Analyze this resume against the job description and provide comprehensive feedback:
+        prompt = f"""Analyze this resume against the job description and provide comprehensive feedback.
 
 RESUME:
 {resume_text[:2500]}
@@ -612,32 +569,16 @@ JOB DESCRIPTION:
 CURRENT ANALYSIS:
 - Overall Match Score: {match_score.overall_score}%
 - Technical Skills Score: {match_score.technical_skills_score}%
-- Experience Score: {match_score.experience_score}%
 - Missing Skills: {', '.join(skill_gap.missing_skills[:5]) if skill_gap.missing_skills else 'None identified'}
 
-Provide detailed feedback in the following structure:
+Provide feedback in this structure:
+## Resume Strengths
+## Areas for Improvement
+## Content Recommendations
+## Formatting & Structure
+## Next Steps
 
-## 📊 Resume Strengths
-- List 3-5 key strengths and what makes them effective
-
-## 🎯 Areas for Improvement
-- Identify specific areas that need enhancement
-- Explain why each area is important for this role
-
-## 💡 Content Recommendations
-- Specific suggestions for improving resume content
-- Recommended keywords and phrases to include
-
-## 🚀 Formatting & Structure
-- Suggestions for better organization and presentation
-- ATS optimization recommendations
-
-## 📈 Next Steps
-- Prioritized action items for immediate improvement
-- Long-term development suggestions
-
-Keep feedback constructive, specific, and actionable. Use professional language with clear examples.
-"""
+Be constructive, specific, and actionable."""
         
         response = self._make_api_request(prompt, system_prompt)
         
