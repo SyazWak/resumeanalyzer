@@ -78,5 +78,8 @@ temp_*
 *_old.*
 *_test.*
 
-# Streamlit
-.streamlit/
+# Streamlit secrets only (config.toml is committed)
+.streamlit/secrets.toml
+
+# Local agent skill installs
+.agents/

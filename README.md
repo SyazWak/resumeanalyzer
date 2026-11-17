@@ -1,8 +1,8 @@
-# 🤖 AI Resume Analyzer
+# AI Resume Analyzer
 
 An intelligent resume analysis system powered by AI that provides comprehensive insights for job applications.
 
-## ✨ Features
+## Features
 
 - **Smart Match Scoring**: AI-driven compatibility assessment with detailed breakdown
 - **Skill Gap Analysis**: Identifies missing skills and provides learning recommendations
@@ -17,7 +17,7 @@ An intelligent resume analysis system powered by AI that provides comprehensive 
 - **Resilient AI analysis with fallback model support**: Automatic failover to alternative AI models
 - **Progress indicators during analysis**: Visual feedback with spinners and status updates
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Setup
 ```bash
@@ -49,32 +49,45 @@ python main.py --resume resume.pdf --job_description job.txt
 - Click "Rewrite Resume" tab in the web interface
 - Or use the CLI with `--resume` flag
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 resumeanalyzer/
 ├── main.py                    # CLI application
 ├── app.py                     # Web interface (Streamlit)
 ├── utils/
-│   ├── ai_analyzer.py         # AI analysis engine
+│   ├── ai_analyzer.py         # AI analysis engine (OpenRouter)
 │   ├── text_extractor.py      # File text extraction
 │   ├── visualizer.py          # Charts and reports
-│   └── resume_writer.py       # Resume rewrite and export
+│   ├── resume_writer.py       # Resume rewrite and export
+│   └── results.py             # Shared result/summary assembly
+├── .streamlit/
+│   └── config.toml            # Native Streamlit theme defaults
 ├── static/
-│   └── styles.css             # Theme CSS
+│   └── styles.css             # Minimal brand-polish CSS
 ├── tests/                     # Unit tests
 ├── pyproject.toml             # Project config
 ├── requirements.txt           # Dependencies
 └── README.md
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables (.env)
-```bash
-OPENROUTER_API_KEY=your_api_key_here
-AI_MODEL=deepseek/deepseek-chat-v3-0324:free
-```
+Copy `.env.example` to `.env` and adjust as needed. All of these are read by the analyzer:
+
+| Variable | Purpose | Value in `.env.example` |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Required. API key from OpenRouter | — |
+| `AI_MODEL` | Primary chat model (`DEEPSEEK_MODEL` still works as a fallback name) | `deepseek/deepseek-chat-v3-0324:free` |
+| `OPENROUTER_BASE_URL` | API endpoint | `https://openrouter.ai/api/v1` |
+| `FALLBACK_MODELS` | Comma-separated models tried on rate limits/errors | — |
+| `TEMPERATURE` / `MAX_TOKENS` / `API_TIMEOUT` | Generation and request settings | `0.1` / `4000` / `30` |
+| `DEFAULT_LOCATION` / `DEFAULT_INDUSTRY` | Fallback context for salary estimation | `General` / `Technology` |
+| `ENABLE_*` | Toggle detailed analysis, improvement suggestions, salary, skill gap, ATS | `true` |
+
+### Theme
+The app uses Streamlit's native theming. Defaults live in `.streamlit/config.toml` (dark by default); switch light/dark any time via the hamburger menu → **Settings → Theme**. `static/styles.css` only adds accent colors and spacing.
 
 ### Command Line Options
 ```bash
@@ -87,7 +100,7 @@ Options:
   --verbose, -v   Enable detailed output
 ```
 
-## 📊 Sample Output
+## Sample Output
 
 ```json
 {
@@ -110,14 +123,15 @@ Options:
 }
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 A built-in troubleshooting panel is available in the sidebar (click "Troubleshooting" expander) with common solutions.
 
 **AI Analysis Not Working**
-- Check your `.env` file has valid `OPENROUTER_API_KEY`
+- Check your `.env` file has a valid, non-placeholder `OPENROUTER_API_KEY` (the app will warn in the sidebar/CLI if it is missing)
 - Verify OpenRouter account has credits
 - Check internet connectivity
+- If an individual analysis step fails, the rest of the report still renders and the specific error is shown above the results and in the downloaded JSON (`summary.analysis_errors`)
 
 **PDF Extraction Fails**
 - Ensure PDF is not password protected
@@ -128,17 +142,17 @@ A built-in troubleshooting panel is available in the sidebar (click "Troubleshoo
 - Ensure virtual environment is activated
 - Check Python version (3.8+ required)
 
-## � License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2025 SyazWak
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **OpenRouter** for API infrastructure
 - **Streamlit** for web interface
 
-## 📞 Support
+## Support
 
-📧 Email: muhdwaiz200@gmail.com
+Email: muhdwaiz200@gmail.com

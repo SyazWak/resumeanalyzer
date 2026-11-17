@@ -30,6 +30,9 @@ dev = [
     "pytest>=7.4.0",
     "ruff>=0.1.0",
 ]
+viz = [
+    "wordcloud>=1.9.0",
+]
 
 [tool.ruff]
 target-version = "py38"

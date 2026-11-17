@@ -10,12 +10,13 @@ Copyright (c) 2025 SyazWak
 Licensed under the MIT License - see LICENSE file for details.
 """
 
+import ast
 import json
 import logging
 import os
 import time
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from dotenv import load_dotenv
@@ -28,18 +29,57 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+class AIAnalysisError(Exception):
+    """An AI request failed in a way that should be shown to the user."""
+
+    def __init__(self, message: str, retryable: bool = True):
+        super().__init__(message)
+        self.message = message
+        self.retryable = retryable
+
+
 @dataclass
 class AnalysisConfig:
-    """Configuration for AI analysis."""
+    """Configuration for AI analysis. Values are read from the environment."""
 
     model: str = "deepseek/deepseek-chat-v3-0324:free"
     temperature: float = 0.7
     max_tokens: int = 2000
+    request_timeout: int = 30
     enable_detailed_analysis: bool = True
     enable_salary_estimation: bool = True
     enable_skill_gap_analysis: bool = True
     enable_ats_optimization: bool = True
     enable_improvement_suggestions: bool = True
+    default_location: str = "General"
+    default_industry: str = "Technology"
+
+    @classmethod
+    def from_env(cls) -> "AnalysisConfig":
+        """Build a configuration from environment variables with safe defaults."""
+
+        def flag(name: str, default: bool = True) -> bool:
+            return os.getenv(name, str(default)).strip().lower() == "true"
+
+        def number(name: str, default, cast):
+            try:
+                return cast(os.getenv(name, str(default)))
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            model=os.getenv("AI_MODEL", os.getenv("DEEPSEEK_MODEL", "")).strip() or cls.model,
+            temperature=number("TEMPERATURE", 0.7, float),
+            max_tokens=number("MAX_TOKENS", 2000, int),
+            request_timeout=number("API_TIMEOUT", 30, int),
+            enable_detailed_analysis=flag("ENABLE_DETAILED_ANALYSIS"),
+            enable_salary_estimation=flag("ENABLE_SALARY_ESTIMATION"),
+            enable_skill_gap_analysis=flag("ENABLE_SKILL_GAP_ANALYSIS"),
+            enable_ats_optimization=flag("ENABLE_ATS_OPTIMIZATION"),
+            enable_improvement_suggestions=flag("ENABLE_IMPROVEMENT_SUGGESTIONS"),
+            default_location=os.getenv("DEFAULT_LOCATION", "General").strip() or "General",
+            default_industry=os.getenv("DEFAULT_INDUSTRY", "Technology").strip() or "Technology",
+        )
 
 
 @dataclass
@@ -99,11 +139,122 @@ class ComprehensiveAnalysis:
     detailed_feedback: Dict[str, Any]
     improvement_plan: List[str]
     next_steps: List[str]
+    errors: List[str] = field(default_factory=list)
+
+
+_API_ERROR_MESSAGES: Dict[str, Tuple[str, bool]] = {
+    "AUTH_ERROR:": ("Authentication failed. Check your OpenRouter API key.", False),
+    "CREDIT_ERROR:": ("Insufficient credits. Add credits to your OpenRouter account.", False),
+    "RATE_LIMIT_ERROR:": ("Rate limit exceeded on all models. Try again shortly.", True),
+    "TIMEOUT_ERROR:": ("The AI service timed out. Check your connection and retry.", True),
+    "CONNECTION_ERROR:": (
+        "Unable to connect to OpenRouter. Check your internet connection.",
+        True,
+    ),
+    "REQUEST_ERROR:": ("The AI request failed. Please try again.", True),
+    "API Error": ("The AI service returned an error. Please try again.", True),
+    "AI analysis unavailable": ("No OpenRouter API key configured.", False),
+}
+
+
+def detect_api_error(response: str) -> Optional[Tuple[str, bool]]:
+    """Return a (message, retryable) pair when an API response is an error marker."""
+    for prefix, error in _API_ERROR_MESSAGES.items():
+        if response.startswith(prefix):
+            return error
+    return None
+
+
+def coerce_score(value: Any, default: float = 0.0) -> float:
+    """Coerce an LLM-provided score to a float in the 0-100 range."""
+    try:
+        return max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def coerce_string_list(value: Any) -> List[str]:
+    """Coerce an LLM-provided value into a clean list of strings."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    result = []
+    for item in value:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def parse_json_response(response: str) -> Dict[str, Any]:
+    """
+    Parse JSON from an AI response with multiple fallback strategies.
+
+    Args:
+        response: Raw AI response text
+
+    Returns:
+        Parsed JSON dict or fallback with raw text
+    """
+    # Strategy 1: Direct parse
+    try:
+        return json.loads(response.strip())
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Strategy 2: Extract from markdown fences
+    if "```json" in response:
+        try:
+            json_text = response.split("```json")[1].split("```")[0]
+            return json.loads(json_text.strip())
+        except (json.JSONDecodeError, IndexError):
+            pass
+
+    # Strategy 3: Find first { and last }
+    def from_braces(text: str) -> Optional[Dict[str, Any]]:
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end <= start:
+            return None
+        try:
+            return json.loads(text[start:end])
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    parsed = from_braces(response)
+    if parsed is not None:
+        return parsed
+
+    # Strategy 4: Clean trailing commas, then retry braces
+    import re
+
+    cleaned = re.sub(r",\s*([}\]])", r"\1", response)
+    parsed = from_braces(cleaned)
+    if parsed is not None:
+        return parsed
+
+    # Strategy 5: Python literals (single quotes) — ast.literal_eval is safe
+    try:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}") + 1
+        if start != -1 and end > start:
+            literal = ast.literal_eval(cleaned[start:end])
+            if isinstance(literal, dict):
+                return literal
+    except (ValueError, SyntaxError, MemoryError, RecursionError):
+        pass
+
+    # Strategy 6: Fallback — return raw text in explanation
+    logger.warning(f"Failed to parse JSON response: {response[:200]}...")
+    return {"explanation": response, "_parse_failed": True}
 
 
 class AdvancedAIAnalyzer:
     """
-    Advanced AI-powered resume analyzer using DeepSeek API.
+    AI-powered resume analyzer using any OpenRouter chat model.
 
     Features:
     - Intelligent match scoring with detailed breakdown
@@ -116,15 +267,13 @@ class AdvancedAIAnalyzer:
 
     def __init__(self, config: Optional[AnalysisConfig] = None):
         """Initialize the AI analyzer."""
-        self.config = config or AnalysisConfig()
-
-        # Override model with environment variable if available
-        env_model = os.getenv("AI_MODEL", os.getenv("DEEPSEEK_MODEL", "")).strip()
-        if env_model:
-            self.config.model = env_model
+        # An explicitly supplied config wins; otherwise read all settings from env.
+        self.config = config or AnalysisConfig.from_env()
 
         self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip().strip("'\"")
-        self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        placeholder_keys = {"your_openrouter_api_key_here", "your_api_key_here", "changeme"}
+        self.api_configured = bool(self.api_key) and self.api_key.lower() not in placeholder_keys
+        self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 
         # Load fallback models
         self.fallback_models = []
@@ -137,10 +286,10 @@ class AdvancedAIAnalyzer:
         if fallback_model and fallback_model not in self.fallback_models:
             self.fallback_models.append(fallback_model)
 
-        if not self.api_key:
-            logger.warning("OpenRouter API key not found. AI analysis will be limited.")
+        if not self.api_configured:
+            logger.warning("OpenRouter API key not configured. AI analysis is unavailable.")
         else:
-            logger.info(f"API key loaded successfully (length: {len(self.api_key)})")
+            logger.info("OpenRouter API key loaded successfully")
             logger.info(f"Primary model: {self.config.model}")
             if self.fallback_models:
                 logger.info(f"Fallback models: {', '.join(self.fallback_models)}")
@@ -155,10 +304,38 @@ class AdvancedAIAnalyzer:
         # Track which model was last used successfully
         self.last_successful_model = self.config.model
 
-        # Feature flags
-        self.enable_salary = os.getenv("ENABLE_SALARY_ESTIMATION", "true").lower() == "true"
-        self.enable_skill_gap = os.getenv("ENABLE_SKILL_GAP_ANALYSIS", "true").lower() == "true"
-        self.enable_ats = os.getenv("ENABLE_ATS_OPTIMIZATION", "true").lower() == "true"
+        # Non-retryable failures stop the remaining API calls in one analysis run.
+        self._fatal_error: Optional[str] = None
+        self.reset_errors()
+
+        # Feature flags (kept as attributes for backwards compatibility)
+        self.enable_salary = self.config.enable_salary_estimation
+        self.enable_skill_gap = self.config.enable_skill_gap_analysis
+        self.enable_ats = self.config.enable_ats_optimization
+
+    def reset_errors(self) -> None:
+        """Reset per-run failure tracking before a new analysis."""
+        self._fatal_error = None
+        self.errors: List[str] = []
+
+    def _record_error(self, step: str, error: Exception) -> None:
+        """Record a failed analysis step with a readable message."""
+        if isinstance(error, AIAnalysisError):
+            message = error.message
+            if not error.retryable:
+                self._fatal_error = self._fatal_error or message
+        else:
+            message = str(error)
+        self.errors.append(f"{step}: {message}")
+        logger.error(f"{step} failed: {message}")
+
+    def _run_step(self, step: str, fallback, function, *args):
+        """Run one analysis step, returning a fallback result on failure."""
+        try:
+            return function(*args)
+        except Exception as e:  # each step is independently recoverable
+            self._record_error(step, e)
+            return fallback
 
     def analyze_resume_comprehensive(
         self,
@@ -169,82 +346,89 @@ class AdvancedAIAnalyzer:
         """
         Perform comprehensive AI-powered resume analysis.
 
-        Args:
-            resume_text (str): The resume content
-            job_description (str): The job description
-            additional_context (Dict): Additional context like industry, location, etc.
-
-        Returns:
-            ComprehensiveAnalysis: Complete analysis results
+        Each analysis step is independent: a failure in one section is reported
+        in ``errors`` but does not discard the other results.
         """
         logger.info("Starting comprehensive AI analysis...")
+        self.reset_errors()
 
-        # Match score (critical — failure is total)
-        try:
-            match_score = self._analyze_match_score(resume_text, job_description)
-        except Exception as e:
-            logger.error(f"Match score analysis failed: {e}")
-            match_score = MatchScore(
+        def neutral_score(explanation: str) -> MatchScore:
+            return MatchScore(
                 overall_score=50.0,
                 technical_skills_score=50.0,
                 experience_score=50.0,
                 education_score=50.0,
                 soft_skills_score=50.0,
                 ats_score=50.0,
-                explanation=f"Analysis error: {str(e)}",
+                explanation=explanation,
             )
 
-        # Skill gap analysis (optional via feature flag)
-        skill_gap = SkillGap(
-            missing_skills=["Analysis disabled or failed"],
-            skill_level_gaps={},
-            recommended_learning_path=[],
-            priority_skills=[],
-        )
-        if self.enable_skill_gap:
-            try:
-                skill_gap = self._analyze_skill_gap(resume_text, job_description)
-            except Exception as e:
-                logger.error(f"Skill gap analysis failed: {e}")
+        match_score = self._run_step(
+            "Match score",
+            None,
+            self._analyze_match_score,
+            resume_text,
+            job_description,
+        ) or neutral_score("AI analysis unavailable — a neutral score was assigned.")
 
-        # ATS optimization (optional via feature flag)
-        ats_optimization = ATSOptimization(
-            ats_score=70.0,
-            keyword_density_score=70.0,
-            format_score=80.0,
-            missing_ats_keywords=[],
-            formatting_improvements=["Analysis disabled or failed"],
-            keyword_suggestions=[],
+        skill_gap = (
+            self._run_step(
+                "Skill gap",
+                SkillGap(
+                    missing_skills=[],
+                    skill_level_gaps={},
+                    recommended_learning_path=[],
+                    priority_skills=[],
+                ),
+                self._analyze_skill_gap,
+                resume_text,
+                job_description,
+            )
+            if self.enable_skill_gap
+            else SkillGap([], {}, [], [])
         )
-        if self.enable_ats:
-            try:
-                ats_optimization = self._analyze_ats_optimization(resume_text, job_description)
-            except Exception as e:
-                logger.error(f"ATS optimization analysis failed: {e}")
 
-        # Salary estimation (optional via feature flag)
+        ats_optimization = (
+            self._run_step(
+                "ATS optimization",
+                ATSOptimization(70.0, 70.0, 80.0, [], [], []),
+                self._analyze_ats_optimization,
+                resume_text,
+                job_description,
+            )
+            if self.enable_ats
+            else ATSOptimization(70.0, 70.0, 80.0, [], [], [])
+        )
+
         salary_estimation = None
         if self.enable_salary:
-            try:
-                salary_estimation = self._estimate_salary(
-                    resume_text, job_description, additional_context
-                )
-            except Exception as e:
-                logger.error(f"Salary estimation failed: {e}")
-
-        # Detailed feedback (non-critical)
-        try:
-            detailed_feedback = self._generate_detailed_feedback(
-                resume_text, job_description, match_score, skill_gap
+            salary_estimation = self._run_step(
+                "Salary estimation",
+                None,
+                self._estimate_salary,
+                resume_text,
+                job_description,
+                additional_context,
             )
-        except Exception as e:
-            logger.error(f"Detailed feedback generation failed: {e}")
-            detailed_feedback = {"message": f"Feedback generation failed: {str(e)}"}
 
-        # Create improvement plan (uses already-computed data)
-        improvement_plan = self._create_improvement_plan(match_score, skill_gap, ats_optimization)
+        if self.config.enable_detailed_analysis:
+            detailed_feedback = self._run_step(
+                "Detailed feedback",
+                {"detailed_feedback": "Feedback unavailable for this run."},
+                self._generate_detailed_feedback,
+                resume_text,
+                job_description,
+                match_score,
+                skill_gap,
+            )
+        else:
+            detailed_feedback = {"detailed_feedback": "Detailed analysis is disabled."}
 
-        # Generate next steps
+        improvement_plan = (
+            self._create_improvement_plan(match_score, skill_gap, ats_optimization)
+            if self.config.enable_improvement_suggestions
+            else []
+        )
         next_steps = self._generate_next_steps(improvement_plan, skill_gap)
 
         return ComprehensiveAnalysis(
@@ -255,12 +439,39 @@ class AdvancedAIAnalyzer:
             detailed_feedback=detailed_feedback,
             improvement_plan=improvement_plan,
             next_steps=next_steps,
+            errors=list(self.errors),
         )
+
+    def _call_api_json(self, prompt: str, system_prompt: str = "") -> Dict[str, Any]:
+        """Call the API and return parsed JSON, raising a friendly error on failure."""
+        if not self.api_configured:
+            raise AIAnalysisError(
+                "No OpenRouter API key configured. Add OPENROUTER_API_KEY to your .env file.",
+                retryable=False,
+            )
+        if self._fatal_error:
+            raise AIAnalysisError(self._fatal_error, retryable=False)
+
+        response = self._make_api_request(prompt, system_prompt)
+
+        error = detect_api_error(response)
+        if error:
+            message, retryable = error
+            if not retryable:
+                self._fatal_error = self._fatal_error or message
+            raise AIAnalysisError(message, retryable=retryable)
+
+        data = parse_json_response(response)
+        if data.get("_parse_failed"):
+            raise AIAnalysisError("The AI returned an unreadable response. Please try again.")
+        return data
 
     def _make_api_request(self, prompt: str, system_prompt: str = "") -> str:
         """Make a request to the AI API with fallback model support."""
-        if not self.api_key:
+        if not self.api_configured:
             return "AI analysis unavailable - no API key configured"
+        if self._fatal_error:
+            return f"REQUEST_ERROR: {self._fatal_error}"
 
         # List of models to try (primary + fallbacks)
         models_to_try = [self.config.model] + self.fallback_models
@@ -286,7 +497,7 @@ class AdvancedAIAnalyzer:
                     f"{self.base_url}/chat/completions",
                     headers=self.headers,
                     data=json.dumps(payload),
-                    timeout=30,
+                    timeout=self.config.request_timeout,
                 )
 
                 logger.info(f"API Response Status for {model}: {response.status_code}")
@@ -299,17 +510,17 @@ class AdvancedAIAnalyzer:
                     return result["choices"][0]["message"]["content"]
 
                 elif response.status_code == 401:
-                    error_msg = "❌ API authentication failed. Please check your OpenRouter API key and account status."
-                    logger.error(f"{error_msg} Response: {response.text}")
+                    error_msg = "API authentication failed. Check your OpenRouter API key and account status."
+                    logger.error(f"{error_msg} (HTTP {response.status_code})")
                     # Auth errors are not recoverable with fallback models
+                    self._fatal_error = error_msg
                     return f"AUTH_ERROR: {error_msg}"
 
                 elif response.status_code == 402:
-                    error_msg = (
-                        "💳 Insufficient credits. Please add credits to your OpenRouter account."
-                    )
-                    logger.error(f"{error_msg} Response: {response.text}")
+                    error_msg = "Insufficient credits. Add credits to your OpenRouter account."
+                    logger.error(f"{error_msg} (HTTP {response.status_code})")
                     # Credit errors are not recoverable with fallback models
+                    self._fatal_error = error_msg
                     return f"CREDIT_ERROR: {error_msg}"
 
                 elif response.status_code == 429:
@@ -372,53 +583,8 @@ class AdvancedAIAnalyzer:
         return "ERROR: All fallback models failed"
 
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
-        """
-        Parse JSON from AI response with multiple fallback strategies.
-
-        Args:
-            response: Raw AI response text
-
-        Returns:
-            Parsed JSON dict or fallback with raw text
-        """
-        # Strategy 1: Direct parse
-        try:
-            return json.loads(response.strip())
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-        # Strategy 2: Extract from markdown fences
-        if "```json" in response:
-            try:
-                json_text = response.split("```json")[1].split("```")[0]
-                return json.loads(json_text.strip())
-            except (json.JSONDecodeError, IndexError):
-                pass
-
-        # Strategy 3: Find first { and last }
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                return json.loads(response[start:end])
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-        # Strategy 4: Clean common issues (trailing commas)
-        try:
-            import re
-
-            cleaned = re.sub(r",\s*([}\]])", r"\1", response)
-            start = cleaned.find("{")
-            end = cleaned.rfind("}") + 1
-            if start != -1 and end > start:
-                return json.loads(cleaned[start:end])
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-        # Strategy 5: Fallback — return raw text in explanation
-        logger.warning(f"Failed to parse JSON response: {response[:200]}...")
-        return {"explanation": response, "_parse_failed": True}
+        """Backwards-compatible wrapper around :func:`parse_json_response`."""
+        return parse_json_response(response)
 
     def get_model_status(self) -> Dict[str, Any]:
         """Get current model configuration and status."""
@@ -428,6 +594,9 @@ class AdvancedAIAnalyzer:
             "last_successful_model": getattr(self, "last_successful_model", self.config.model),
             "total_models_available": 1 + len(self.fallback_models),
             "api_configured": bool(self.api_key),
+            "api_key_valid": self.api_configured,
+            "temperature": self.config.temperature,
+            "max_tokens": self.config.max_tokens,
         }
 
     def _analyze_match_score(self, resume_text: str, job_description: str) -> MatchScore:
@@ -463,28 +632,16 @@ JOB DESCRIPTION:
 Score each category fairly. Consider transferable skills and potential.
 Respond with JSON only."""
 
-        response = self._make_api_request(prompt, system_prompt)
-
-        score_data = self._parse_json_response(response)
-        if score_data.get("_parse_failed"):
-            return MatchScore(
-                overall_score=50.0,
-                technical_skills_score=50.0,
-                experience_score=50.0,
-                education_score=50.0,
-                soft_skills_score=50.0,
-                ats_score=50.0,
-                explanation=score_data.get("explanation", "Analysis completed"),
-            )
+        score_data = self._call_api_json(prompt, system_prompt)
 
         return MatchScore(
-            overall_score=score_data.get("overall_score", 0),
-            technical_skills_score=score_data.get("technical_skills_score", 0),
-            experience_score=score_data.get("experience_score", 0),
-            education_score=score_data.get("education_score", 0),
-            soft_skills_score=score_data.get("soft_skills_score", 0),
-            ats_score=score_data.get("ats_score", 0),
-            explanation=score_data.get("explanation", "Analysis completed"),
+            overall_score=coerce_score(score_data.get("overall_score"), 50.0),
+            technical_skills_score=coerce_score(score_data.get("technical_skills_score"), 50.0),
+            experience_score=coerce_score(score_data.get("experience_score"), 50.0),
+            education_score=coerce_score(score_data.get("education_score"), 50.0),
+            soft_skills_score=coerce_score(score_data.get("soft_skills_score"), 50.0),
+            ats_score=coerce_score(score_data.get("ats_score"), 50.0),
+            explanation=str(score_data.get("explanation", "Analysis completed")),
         )
 
     def _analyze_skill_gap(self, resume_text: str, job_description: str) -> SkillGap:
@@ -517,22 +674,14 @@ JOB DESCRIPTION:
 Identify missing skills, skill level gaps, learning path, and priorities.
 Respond with JSON only."""
 
-        response = self._make_api_request(prompt, system_prompt)
+        gap_data = self._call_api_json(prompt, system_prompt)
 
-        gap_data = self._parse_json_response(response)
-        if gap_data.get("_parse_failed"):
-            return SkillGap(
-                missing_skills=["Unable to analyze"],
-                skill_level_gaps={},
-                recommended_learning_path=["Review job requirements", "Update skills"],
-                priority_skills=[],
-            )
-
+        skill_level_gaps = gap_data.get("skill_level_gaps", {})
         return SkillGap(
-            missing_skills=gap_data.get("missing_skills", []),
-            skill_level_gaps=gap_data.get("skill_level_gaps", {}),
-            recommended_learning_path=gap_data.get("recommended_learning_path", []),
-            priority_skills=gap_data.get("priority_skills", []),
+            missing_skills=coerce_string_list(gap_data.get("missing_skills")),
+            skill_level_gaps=skill_level_gaps if isinstance(skill_level_gaps, dict) else {},
+            recommended_learning_path=coerce_string_list(gap_data.get("recommended_learning_path")),
+            priority_skills=coerce_string_list(gap_data.get("priority_skills")),
         )
 
     def _analyze_ats_optimization(self, resume_text: str, job_description: str) -> ATSOptimization:
@@ -562,26 +711,15 @@ Evaluate ATS compatibility, keyword density, format, and missing keywords.
 For each keyword suggestion, specify exactly where in the resume it should be placed.
 Respond with JSON only."""
 
-        response = self._make_api_request(prompt, system_prompt)
-
-        ats_data = self._parse_json_response(response)
-        if ats_data.get("_parse_failed"):
-            return ATSOptimization(
-                ats_score=75.0,
-                keyword_density_score=70.0,
-                format_score=80.0,
-                missing_ats_keywords=[],
-                formatting_improvements=["Review ATS compatibility"],
-                keyword_suggestions=["Add job-relevant keywords"],
-            )
+        ats_data = self._call_api_json(prompt, system_prompt)
 
         return ATSOptimization(
-            ats_score=ats_data.get("ats_score", 70),
-            keyword_density_score=ats_data.get("keyword_density_score", 70),
-            format_score=ats_data.get("format_score", 80),
-            missing_ats_keywords=ats_data.get("missing_ats_keywords", []),
-            formatting_improvements=ats_data.get("formatting_improvements", []),
-            keyword_suggestions=ats_data.get("keyword_suggestions", []),
+            ats_score=coerce_score(ats_data.get("ats_score"), 70.0),
+            keyword_density_score=coerce_score(ats_data.get("keyword_density_score"), 70.0),
+            format_score=coerce_score(ats_data.get("format_score"), 80.0),
+            missing_ats_keywords=coerce_string_list(ats_data.get("missing_ats_keywords")),
+            formatting_improvements=coerce_string_list(ats_data.get("formatting_improvements")),
+            keyword_suggestions=coerce_string_list(ats_data.get("keyword_suggestions")),
         )
 
     def _estimate_salary(
@@ -599,8 +737,8 @@ Return a JSON object with this exact structure:
   "improvement_potential": "<string: how to increase earning potential>"
 }"""
 
-        location = context.get("location", "General") if context else "General"
-        industry = context.get("industry", "Technology") if context else "Technology"
+        location = (context or {}).get("location") or self.config.default_location
+        industry = (context or {}).get("industry") or self.config.default_industry
 
         prompt = f"""Estimate salary for this candidate profile.
 
@@ -615,25 +753,27 @@ CONTEXT: Location: {location}, Industry: {industry}
 Provide realistic USD annual salary estimates.
 Respond with JSON only."""
 
-        response = self._make_api_request(prompt, system_prompt)
+        salary_data = self._call_api_json(prompt, system_prompt)
 
-        salary_data = self._parse_json_response(response)
-        if salary_data.get("_parse_failed"):
-            return SalaryEstimation(
-                estimated_range_min=50000,
-                estimated_range_max=80000,
-                market_average=65000,
-                factors_affecting_salary=["Experience level", "Technical skills"],
-                improvement_potential="Develop additional skills and gain more experience",
-            )
+        def money(key: str, default: float) -> float:
+            try:
+                return max(0.0, float(salary_data.get(key, default)))
+            except (TypeError, ValueError):
+                return default
+
+        minimum, maximum = money("estimated_range_min", 50000), money("estimated_range_max", 80000)
+        if minimum > maximum:
+            minimum, maximum = maximum, minimum
 
         return SalaryEstimation(
-            estimated_range_min=salary_data.get("estimated_range_min", 50000),
-            estimated_range_max=salary_data.get("estimated_range_max", 80000),
-            market_average=salary_data.get("market_average", 65000),
-            factors_affecting_salary=salary_data.get("factors_affecting_salary", []),
-            improvement_potential=salary_data.get(
-                "improvement_potential", "Continue skill development"
+            estimated_range_min=minimum,
+            estimated_range_max=maximum,
+            market_average=money("market_average", 65000),
+            factors_affecting_salary=coerce_string_list(
+                salary_data.get("factors_affecting_salary")
+            ),
+            improvement_potential=str(
+                salary_data.get("improvement_potential", "Continue skill development")
             ),
         )
 
@@ -641,6 +781,9 @@ Respond with JSON only."""
         self, resume_text: str, job_description: str, match_score: MatchScore, skill_gap: SkillGap
     ) -> Dict[str, Any]:
         """Generate detailed feedback using AI."""
+        if self._fatal_error:
+            raise AIAnalysisError(self._fatal_error, retryable=False)
+
         system_prompt = """You are an expert career coach and resume analyst. Provide detailed, actionable feedback using markdown formatting with clear section headers (##), bullet points, and bold text for emphasis."""
 
         prompt = f"""Analyze this resume against the job description and provide comprehensive feedback.
@@ -666,6 +809,9 @@ Provide feedback in this structure:
 Be constructive, specific, and actionable."""
 
         response = self._make_api_request(prompt, system_prompt)
+        error = detect_api_error(response)
+        if error:
+            raise AIAnalysisError(error[0], retryable=error[1])
 
         return {
             "detailed_feedback": response,
@@ -730,46 +876,6 @@ Be constructive, specific, and actionable."""
         )
 
         return next_steps
-
-    def _create_fallback_analysis(
-        self, resume_text: str, job_description: str
-    ) -> ComprehensiveAnalysis:
-        """Create fallback analysis when AI is unavailable."""
-        return ComprehensiveAnalysis(
-            match_score=MatchScore(
-                overall_score=60.0,
-                technical_skills_score=60.0,
-                experience_score=60.0,
-                education_score=70.0,
-                soft_skills_score=65.0,
-                ats_score=70.0,
-                explanation="AI analysis unavailable - basic assessment provided",
-            ),
-            skill_gap=SkillGap(
-                missing_skills=["AI analysis required for detailed skill gap"],
-                skill_level_gaps={},
-                recommended_learning_path=["Set up AI API for detailed analysis"],
-                priority_skills=[],
-            ),
-            salary_estimation=SalaryEstimation(
-                estimated_range_min=50000,
-                estimated_range_max=80000,
-                market_average=65000,
-                factors_affecting_salary=["Experience", "Skills", "Location"],
-                improvement_potential="Enhance skills and experience",
-            ),
-            ats_optimization=ATSOptimization(
-                ats_score=70.0,
-                keyword_density_score=65.0,
-                format_score=75.0,
-                missing_ats_keywords=[],
-                formatting_improvements=["Enable AI analysis for specific suggestions"],
-                keyword_suggestions=[],
-            ),
-            detailed_feedback={"message": "Configure AI API for detailed feedback"},
-            improvement_plan=["Set up DeepSeek API key", "Run comprehensive analysis"],
-            next_steps=["Add API configuration", "Retry analysis"],
-        )
 
     def export_analysis(self, analysis: ComprehensiveAnalysis, format: str = "json") -> str:
         """Export analysis results in specified format."""

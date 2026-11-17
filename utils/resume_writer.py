@@ -9,10 +9,11 @@ Copyright (c) 2025 SyazWak
 Licensed under the MIT License - see LICENSE file for details.
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from utils.ai_analyzer import detect_api_error, parse_json_response
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -199,7 +200,7 @@ class ResumeWriter:
 
         rewritten_sections = []
         for section in sections:
-            rewritten = self._rewrite_section(
+            rewritten = self.rewrite_section(
                 section["name"],
                 section["content"],
                 job_description,
@@ -219,7 +220,7 @@ class ResumeWriter:
             },
         )
 
-    def _rewrite_section(
+    def rewrite_section(
         self,
         section_name: str,
         content: str,
@@ -269,24 +270,22 @@ Respond with JSON only."""
 
         try:
             response = self.ai_analyzer._make_api_request(prompt, system_prompt)
-
-            # Parse JSON response
-            if "```json" in response:
-                json_text = response.split("```json")[1].split("```")[0]
-            else:
-                json_text = response
-
-            data = json.loads(json_text.strip())
+            data = parse_json_response(response)
+            error = detect_api_error(response)
+            if error:
+                raise ValueError(error[0])
+            if data.get("_parse_failed"):
+                raise ValueError("The AI returned an unusable response")
 
             return SectionRewrite(
                 section_name=section_name,
                 original_text=content,
-                improved_text=data.get("improved_text", content),
-                explanation=data.get("explanation", "Improved wording and keywords"),
+                improved_text=str(data.get("improved_text", content)),
+                explanation=str(data.get("explanation", "Improved wording and keywords")),
                 accepted=True,
             )
 
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             logger.warning(f"Failed to rewrite section '{section_name}': {e}")
             return SectionRewrite(
                 section_name=section_name,
@@ -295,6 +294,9 @@ Respond with JSON only."""
                 explanation=f"Rewrite failed: {str(e)}",
                 accepted=False,
             )
+
+    # Backwards-compatible alias used by older callers and tests.
+    _rewrite_section = rewrite_section
 
     def generate_final_version(self, sections: List[SectionRewrite]) -> str:
         """

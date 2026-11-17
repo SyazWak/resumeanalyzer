@@ -3,7 +3,7 @@
 AI Resume Analyzer - Main CLI Application
 ==========================================
 
-AI-powered command-line interface for resume analysis using DeepSeek.
+AI-powered command-line interface for resume analysis via OpenRouter.
 Provides intelligent insights and recommendations.
 
 Copyright (c) 2025 SyazWak
@@ -26,8 +26,8 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from utils.ai_analyzer import AdvancedAIAnalyzer  # noqa: E402
+from utils.results import build_results_dict  # noqa: E402
 from utils.text_extractor import TextExtractor  # noqa: E402
-from utils.visualizer import ReportVisualizer  # noqa: E402
 
 
 class AIResumeAnalyzer:
@@ -38,17 +38,18 @@ class AIResumeAnalyzer:
     def __init__(self):
         """Initialize the AI-powered analyzer."""
         self.text_extractor = TextExtractor()
-        self.visualizer = ReportVisualizer()
 
         # Initialize AI analyzer
-        self.ai_analyzer = None
-        self.ai_available = False
         try:
             self.ai_analyzer = AdvancedAIAnalyzer()
-            print("🤖 AI-powered analysis enabled!")
-            self.ai_available = True
+            self.ai_available = self.ai_analyzer.api_configured
+            if not self.ai_available:
+                print("⚠️ AI analysis unavailable: set OPENROUTER_API_KEY in your .env file")
+            else:
+                print("🤖 AI-powered analysis enabled!")
         except Exception as e:
             print(f"⚠️ AI analysis unavailable: {e}")
+            self.ai_analyzer = None
             self.ai_available = False
 
     def analyze_resume(
@@ -91,29 +92,17 @@ class AIResumeAnalyzer:
             ai_analysis = self.ai_analyzer.analyze_resume_comprehensive(
                 resume_text, job_text, context
             )
-            ai_results = {
-                "ai_match_score": ai_analysis.match_score,
-                "skill_gap_analysis": ai_analysis.skill_gap,
-                "salary_estimation": ai_analysis.salary_estimation,
-                "ats_optimization": ai_analysis.ats_optimization,
-                "ai_feedback": ai_analysis.detailed_feedback,
-                "improvement_plan": ai_analysis.improvement_plan,
-                "next_steps": ai_analysis.next_steps,
-            }
             print("✨ AI analysis completed!")
 
             # Step 3: Prepare results
-            results = {
-                "metadata": {
+            results = build_results_dict(
+                ai_analysis,
+                context,
+                {
                     "resume_path": resume_path,
                     "job_description_path": job_description_path,
-                    "analysis_timestamp": self._get_timestamp(),
-                    "ai_enhanced": True,
-                    "context": context or {},
                 },
-                "ai_analysis": ai_results,
-                "summary": self._create_analysis_summary(ai_results),
-            }
+            )
 
             # Step 4: Save results if output path provided
             if output_path:
@@ -131,27 +120,6 @@ class AIResumeAnalyzer:
             error_msg = f"Analysis failed: {str(e)}"
             print(f"❌ {error_msg}")
             return self._create_error_result(error_msg)
-
-    def _create_analysis_summary(self, ai_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a summary from AI analysis results."""
-        summary = {"recommendations": []}
-
-        if ai_results and "ai_match_score" in ai_results:
-            ai_score = ai_results["ai_match_score"]
-            summary["ai_overall_score"] = ai_score.overall_score
-            summary["ai_breakdown"] = {
-                "technical_skills": ai_score.technical_skills_score,
-                "experience": ai_score.experience_score,
-                "education": ai_score.education_score,
-                "soft_skills": ai_score.soft_skills_score,
-                "ats_compatibility": ai_score.ats_score,
-            }
-
-            # Add recommendations from AI analysis
-            if "improvement_plan" in ai_results:
-                summary["recommendations"].extend(ai_results["improvement_plan"])
-
-        return summary
 
     def _extract_text_safely(self, file_path: str, file_type: str) -> str:
         """Safely extract text from a file with error handling."""
@@ -191,17 +159,11 @@ class AIResumeAnalyzer:
             "error": True,
             "error_message": error_message,
             "summary": {
-                "traditional_score": 0,
                 "ai_overall_score": 0,
                 "recommendations": [f"❌ {error_message}"],
+                "analysis_errors": [error_message],
             },
         }
-
-    def _get_timestamp(self) -> str:
-        """Get current timestamp string."""
-        from datetime import datetime
-
-        return datetime.now().isoformat()
 
     def print_results(self, results: Dict[str, Any]) -> None:
         """Print analysis results in a formatted way."""
@@ -216,22 +178,19 @@ class AIResumeAnalyzer:
         summary = results.get("summary", {})
 
         # Display scores
-        traditional_score = summary.get("traditional_score", 0)
         ai_score = summary.get("ai_overall_score", 0)
+        if "ai_overall_score" in summary:
+            print("\n📊 OVERALL SCORE:")
+            print(f"   AI Match Score: {ai_score:.1f}%")
 
-        if ai_score > 0:
-            print("\n📊 OVERALL SCORES:")
-            print(f"   Traditional Analysis: {traditional_score:.1f}%")
-            print(f"   AI-Enhanced Score:    {ai_score:.1f}%")
-
-            # Show AI breakdown
             ai_breakdown = summary.get("ai_breakdown", {})
             if ai_breakdown:
                 print("\n🔍 AI DETAILED BREAKDOWN:")
                 for category, score in ai_breakdown.items():
                     print(f"   {category.replace('_', ' ').title()}: {score:.1f}%")
-        else:
-            print(f"\n📊 TRADITIONAL ANALYSIS SCORE: {traditional_score:.1f}%")
+
+        for error in summary.get("analysis_errors", []):
+            print(f"\n⚠️  {error}")
 
         # Show AI-specific insights
         ai_analysis = results.get("ai_analysis", {})
@@ -268,18 +227,17 @@ class AIResumeAnalyzer:
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
-        description="AI Resume Analyzer - Compare resumes with job descriptions using DeepSeek AI",
+        description="AI Resume Analyzer - Compare resumes with job descriptions using AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python main.py --resume resume.pdf --job_description job.txt
   python main.py -r resume.txt -j job_desc.txt --output results.json --location "San Francisco" --industry "Technology"
-  python main.py --resume resume.pdf --job_description job.txt --traditional-only
         """,
     )
 
     parser.add_argument(
-        "--resume", "-r", type=str, required=True, help="Path to the resume file (PDF or TXT)"
+        "--resume", "-r", type=str, required=True, help="Path to the resume file (PDF, TXT or DOCX)"
     )
 
     parser.add_argument(
@@ -287,7 +245,7 @@ Examples:
         "-j",
         type=str,
         required=True,
-        help="Path to the job description file (PDF or TXT)",
+        help="Path to the job description file (PDF, TXT or DOCX)",
     )
 
     parser.add_argument(

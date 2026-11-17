@@ -11,12 +11,11 @@ Licensed under the MIT License - see LICENSE file for details.
 import json
 import os
 import sys
+import tempfile
 import traceback
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict
 
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 # Add project root to path
@@ -24,14 +23,13 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from utils.ai_analyzer import AdvancedAIAnalyzer  # noqa: E402
+from utils.results import build_results_dict  # noqa: E402
 from utils.resume_writer import ResumeWriter  # noqa: E402
 from utils.text_extractor import TextExtractor  # noqa: E402
 from utils.visualizer import ReportVisualizer  # noqa: E402
 
 # Configure Streamlit page
-st.set_page_config(
-    page_title="AI Resume Analyzer", page_icon="🤖", layout="wide", initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Resume Analyzer", layout="wide", initial_sidebar_state="expanded")
 
 
 # Load CSS from file
@@ -46,15 +44,17 @@ class EnhancedStreamlitApp:
     def __init__(self):
         """Initialize the application components."""
         self.text_extractor = TextExtractor()
-        self.visualizer = ReportVisualizer()
+        theme = st.get_option("theme.base") or "light"
+        self.visualizer = ReportVisualizer(theme=str(theme))
 
-        # Initialize AI analyzer
+        # Initialize AI analyzer — a missing API key must be reported, not ignored.
         self.ai_analyzer = None
         self.ai_available = False
-
         try:
             self.ai_analyzer = AdvancedAIAnalyzer()
-            self.ai_available = True
+            self.ai_available = self.ai_analyzer.api_configured
+            if not self.ai_available:
+                st.sidebar.warning("AI unavailable — set OPENROUTER_API_KEY in your .env file")
         except Exception as e:
             st.sidebar.warning(f"AI Analysis unavailable: {str(e)}")
 
@@ -69,7 +69,7 @@ class EnhancedStreamlitApp:
 
         # Main content tabs
         tab1, tab2, tab3, tab4, tab5 = st.tabs(
-            ["📄 Analysis", "🎯 AI Insights", "📊 Visualizations", "✏️ Rewrite Resume", "💾 Results"]
+            ["Analysis", "AI Insights", "Visualizations", "Rewrite Resume", "Results"]
         )
 
         with tab1:
@@ -89,10 +89,10 @@ class EnhancedStreamlitApp:
 
     def render_sidebar(self):
         """Render the sidebar with configuration options."""
-        st.sidebar.title("⚙️ Configuration")
+        st.sidebar.title("Configuration")
 
         # AI Model (collapsible)
-        with st.sidebar.expander("🤖 AI Model", expanded=True):
+        with st.sidebar.expander("AI Model", expanded=True):
             if self.ai_available:
                 primary_model = os.getenv(
                     "AI_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free")
@@ -107,7 +107,7 @@ class EnhancedStreamlitApp:
                 st.error("AI unavailable — check API key")
 
         # Analysis Context (collapsible)
-        with st.sidebar.expander("📋 Analysis Context", expanded=False):
+        with st.sidebar.expander("Analysis Context", expanded=False):
             st.session_state.location = st.text_input(
                 "Location (for salary estimation)",
                 placeholder="e.g., San Francisco, CA",
@@ -118,7 +118,7 @@ class EnhancedStreamlitApp:
             )
 
         # Analysis Settings (collapsible)
-        with st.sidebar.expander("🔧 Settings", expanded=False):
+        with st.sidebar.expander("Settings", expanded=False):
             st.session_state.analysis_depth = st.selectbox(
                 "Analysis Depth",
                 ["Standard", "Comprehensive"],
@@ -128,12 +128,12 @@ class EnhancedStreamlitApp:
         st.sidebar.divider()
 
         # Clear results
-        if st.sidebar.button("🗑️ Clear Results", use_container_width=True):
+        if st.sidebar.button("Clear Results", use_container_width=True):
             self.clear_session_state()
             st.rerun()
 
         # Troubleshooting
-        with st.sidebar.expander("🔧 Troubleshooting", expanded=False):
+        with st.sidebar.expander("Troubleshooting", expanded=False):
             st.markdown("""
             **AI Analysis Not Working**
             - Check `.env` has valid `OPENROUTER_API_KEY`
@@ -156,35 +156,35 @@ class EnhancedStreamlitApp:
 
     def render_analysis_tab(self):
         """Render the main analysis tab."""
-        st.header("📄 Document Analysis")
+        st.header("Document Analysis")
 
         # Create two columns for separate input choices
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("📄 Resume Input")
+            st.subheader("Resume Input")
             resume_input_method = st.radio(
                 "Choose resume input method:",
-                ["📁 Upload File", "✏️ Text Input"],
+                ["Upload File", "Text Input"],
                 key="resume_input_method",
                 horizontal=True,
             )
 
-            if resume_input_method == "📁 Upload File":
+            if resume_input_method == "Upload File":
                 self.render_resume_file_upload()
             else:
                 self.render_resume_text_input()
 
         with col2:
-            st.subheader("📋 Job Description Input")
+            st.subheader("Job Description Input")
             job_input_method = st.radio(
                 "Choose job description input method:",
-                ["📁 Upload File", "✏️ Text Input"],
+                ["Upload File", "Text Input"],
                 key="job_input_method",
                 horizontal=True,
             )
 
-            if job_input_method == "📁 Upload File":
+            if job_input_method == "Upload File":
                 self.render_job_file_upload()
             else:
                 self.render_job_text_input()
@@ -193,12 +193,12 @@ class EnhancedStreamlitApp:
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 Analyze Resume", use_container_width=True, type="primary"):
+            if st.button("Analyze Resume", use_container_width=True, type="primary"):
                 self.perform_analysis()
 
     def render_resume_file_upload(self):
         """Render resume file upload interface."""
-        st.info("📁 **Supported formats:** PDF, TXT, DOCX")
+        st.info("**Supported formats:** PDF, TXT, DOCX")
         resume_file = st.file_uploader(
             "Upload resume file",
             type=["pdf", "txt", "docx"],
@@ -207,16 +207,16 @@ class EnhancedStreamlitApp:
         )
         if resume_file:
             file_type = resume_file.type if hasattr(resume_file, "type") else "Unknown"
-            st.write(f"📄 **File:** {resume_file.name} ({file_type})")
+            st.write(f"**File:** {resume_file.name} ({file_type})")
             with st.spinner("Extracting text from resume..."):
                 st.session_state.resume_text = self.extract_text_from_upload(resume_file)
                 if st.session_state.resume_text:
-                    st.success("✅ Resume text extracted successfully!")
+                    st.success("Resume text extracted successfully!")
                     word_count = len(st.session_state.resume_text.split())
                     st.write(
-                        f"📊 **Stats:** {len(st.session_state.resume_text)} characters, ~{word_count} words"
+                        f"**Stats:** {len(st.session_state.resume_text)} characters, ~{word_count} words"
                     )
-                    with st.expander("📄 Preview Resume Text"):
+                    with st.expander("Preview Resume Text"):
                         st.text_area(
                             "Resume Content",
                             st.session_state.resume_text[:500] + "...",
@@ -224,11 +224,11 @@ class EnhancedStreamlitApp:
                             disabled=True,
                         )
                 else:
-                    st.error("❌ Failed to extract text from resume file")
+                    st.error("Failed to extract text from resume file")
 
     def render_resume_text_input(self):
         """Render resume text input interface."""
-        st.info("✏️ **Direct input:** Copy and paste your resume text")
+        st.info("**Direct input:** Copy and paste your resume text")
         resume_text = st.text_area(
             "Paste or type your resume text:",
             height=300,
@@ -238,11 +238,11 @@ class EnhancedStreamlitApp:
         if resume_text.strip():
             st.session_state.resume_text = resume_text
             word_count = len(resume_text.split())
-            st.success(f"✅ Resume text ready ({len(resume_text)} characters, ~{word_count} words)")
+            st.success(f"Resume text ready ({len(resume_text)} characters, ~{word_count} words)")
 
     def render_job_file_upload(self):
         """Render job description file upload interface."""
-        st.info("📁 **Supported formats:** PDF, TXT, DOCX")
+        st.info("**Supported formats:** PDF, TXT, DOCX")
         job_file = st.file_uploader(
             "Upload job description file",
             type=["pdf", "txt", "docx"],
@@ -251,16 +251,16 @@ class EnhancedStreamlitApp:
         )
         if job_file:
             file_type = job_file.type if hasattr(job_file, "type") else "Unknown"
-            st.write(f"📋 **File:** {job_file.name} ({file_type})")
+            st.write(f"**File:** {job_file.name} ({file_type})")
             with st.spinner("Extracting text from job description..."):
                 st.session_state.job_text = self.extract_text_from_upload(job_file)
                 if st.session_state.job_text:
-                    st.success("✅ Job description text extracted successfully!")
+                    st.success("Job description text extracted successfully!")
                     word_count = len(st.session_state.job_text.split())
                     st.write(
-                        f"📊 **Stats:** {len(st.session_state.job_text)} characters, ~{word_count} words"
+                        f"**Stats:** {len(st.session_state.job_text)} characters, ~{word_count} words"
                     )
-                    with st.expander("📋 Preview Job Description"):
+                    with st.expander("Preview Job Description"):
                         st.text_area(
                             "Job Content",
                             st.session_state.job_text[:500] + "...",
@@ -268,11 +268,11 @@ class EnhancedStreamlitApp:
                             disabled=True,
                         )
                 else:
-                    st.error("❌ Failed to extract text from job description file")
+                    st.error("Failed to extract text from job description file")
 
     def render_job_text_input(self):
         """Render job description text input interface."""
-        st.info("✏️ **Direct input:** Copy and paste the job description")
+        st.info("**Direct input:** Copy and paste the job description")
         job_text = st.text_area(
             "Paste or type the job description:",
             height=300,
@@ -282,24 +282,28 @@ class EnhancedStreamlitApp:
         if job_text.strip():
             st.session_state.job_text = job_text
             word_count = len(job_text.split())
-            st.success(
-                f"✅ Job description ready ({len(job_text)} characters, ~{word_count} words)"
-            )
+            st.success(f"Job description ready ({len(job_text)} characters, ~{word_count} words)")
 
     def render_ai_insights_tab(self):
         """Render AI insights tab."""
-        st.header("🎯 AI-Powered Insights")
+        st.header("AI-Powered Insights")
 
         if (
             not hasattr(st.session_state, "analysis_results")
             or not st.session_state.analysis_results
         ):
-            st.info("🔍 Run an analysis first to see AI insights here!")
+            st.info("Run an analysis first to see AI insights here!")
             return
+
+        errors = st.session_state.analysis_results.get("summary", {}).get("analysis_errors", [])
+        if errors:
+            for error in errors:
+                st.warning(error)
+            st.caption("Other sections below were still generated where possible.")
 
         ai_analysis = st.session_state.analysis_results.get("ai_analysis")
         if not ai_analysis:
-            st.warning("⚠️ No AI analysis available. Ensure AI is enabled and try again.")
+            st.warning("No AI analysis available. Ensure AI is enabled and try again.")
             return
 
         # AI Match Score
@@ -324,7 +328,7 @@ class EnhancedStreamlitApp:
 
     def render_ai_match_score(self, match_score):
         """Render AI match score visualization."""
-        st.subheader("🎯 AI Match Score Breakdown")
+        st.subheader("AI Match Score Breakdown")
 
         col1, col2 = st.columns([1, 2])
 
@@ -332,38 +336,18 @@ class EnhancedStreamlitApp:
             st.metric("Overall AI Score", f"{match_score.overall_score:.1f}%")
 
         with col2:
-            # Create radar chart for score breakdown
-            categories = ["Technical Skills", "Experience", "Education", "Soft Skills", "ATS Score"]
-            scores = [
-                match_score.technical_skills_score,
-                match_score.experience_score,
-                match_score.education_score,
-                match_score.soft_skills_score,
-                match_score.ats_score,
-            ]
-
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatterpolar(r=scores, theta=categories, fill="toself", name="Your Score")
-            )
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                showlegend=False,
-                title="Score Breakdown",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="inherit"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            fig = self.visualizer.create_match_radar(asdict(match_score))
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
     def render_skill_gap_analysis(self, skill_gap):
         """Render skill gap analysis."""
-        st.subheader("🎯 Skill Gap Analysis")
+        st.subheader("Skill Gap Analysis")
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### ❌ Missing Skills")
+            st.markdown("### Missing Skills")
             if skill_gap.missing_skills:
                 for skill in skill_gap.missing_skills[:10]:
                     st.markdown(f"- {skill}")
@@ -371,20 +355,20 @@ class EnhancedStreamlitApp:
                 st.success("No major skills missing!")
 
         with col2:
-            st.markdown("### 🔥 Priority Skills to Develop")
+            st.markdown("### Priority Skills to Develop")
             if skill_gap.priority_skills:
                 for i, skill in enumerate(skill_gap.priority_skills[:5], 1):
                     st.markdown(f"{i}. **{skill}**")
 
         # Recommendations
         if hasattr(skill_gap, "recommended_learning_path") and skill_gap.recommended_learning_path:
-            st.markdown("### 💡 Skill Development Recommendations")
+            st.markdown("### Skill Development Recommendations")
             for rec in skill_gap.recommended_learning_path[:5]:
-                st.markdown(f'<div class="recommendation">📚 {rec}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="recommendation">{rec}</div>', unsafe_allow_html=True)
 
     def render_salary_estimation(self, salary_estimation):
         """Render salary estimation."""
-        st.subheader("💰 Salary Estimation")
+        st.subheader("Salary Estimation")
 
         col1, col2, col3 = st.columns(3)
 
@@ -402,7 +386,7 @@ class EnhancedStreamlitApp:
             hasattr(salary_estimation, "factors_affecting_salary")
             and salary_estimation.factors_affecting_salary
         ):
-            st.markdown("### 📈 Salary Factors")
+            st.markdown("### Salary Factors")
             for i, factor in enumerate(salary_estimation.factors_affecting_salary[:5], 1):
                 st.markdown(f"{i}. {factor}")
 
@@ -411,56 +395,29 @@ class EnhancedStreamlitApp:
             hasattr(salary_estimation, "improvement_potential")
             and salary_estimation.improvement_potential
         ):
-            st.markdown("### 📈 Improvement Potential")
-            st.info(f"💡 {salary_estimation.improvement_potential}")
+            st.markdown("### Improvement Potential")
+            st.info(f"{salary_estimation.improvement_potential}")
 
     def render_ats_optimization(self, ats_optimization):
         """Render ATS optimization suggestions."""
-        st.subheader("🤖 ATS Optimization")
+        st.subheader("ATS Optimization")
 
         col1, col2 = st.columns([1, 2])
 
         with col1:
-            # ATS Score gauge
-            fig = go.Figure(
-                go.Indicator(
-                    mode="gauge+number",
-                    value=ats_optimization.ats_score,
-                    domain={"x": [0, 1], "y": [0, 1]},
-                    title={"text": "ATS Score"},
-                    gauge={
-                        "axis": {"range": [None, 100]},
-                        "bar": {"color": "darkblue"},
-                        "steps": [
-                            {"range": [0, 50], "color": "lightgray"},
-                            {"range": [50, 80], "color": "yellow"},
-                            {"range": [80, 100], "color": "green"},
-                        ],
-                        "threshold": {
-                            "line": {"color": "red", "width": 4},
-                            "thickness": 0.75,
-                            "value": 90,
-                        },
-                    },
-                )
-            )
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="inherit"),
-                height=300,
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            fig = self.visualizer.create_score_gauge(ats_optimization.ats_score, "ATS Score")
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            st.markdown("### 🔧 ATS Optimization Suggestions")
+            st.markdown("### ATS Optimization Suggestions")
             if (
                 hasattr(ats_optimization, "formatting_improvements")
                 and ats_optimization.formatting_improvements
             ):
                 for suggestion in ats_optimization.formatting_improvements[:5]:
                     st.markdown(
-                        f'<div class="ai-insight">🔧 {suggestion}</div>', unsafe_allow_html=True
+                        f'<div class="ai-insight">{suggestion}</div>', unsafe_allow_html=True
                     )
 
         # Keyword optimization
@@ -468,7 +425,7 @@ class EnhancedStreamlitApp:
             hasattr(ats_optimization, "missing_ats_keywords")
             and ats_optimization.missing_ats_keywords
         ):
-            st.markdown("### 🔑 Missing ATS Keywords")
+            st.markdown("### Missing ATS Keywords")
             col1, col2 = st.columns(2)
 
             with col1:
@@ -487,41 +444,41 @@ class EnhancedStreamlitApp:
 
     def render_ai_feedback(self, ai_analysis):
         """Render AI feedback and recommendations."""
-        st.subheader("💬 AI Feedback & Recommendations")
+        st.subheader("AI Feedback & Recommendations")
 
         # Detailed feedback
         if "ai_feedback" in ai_analysis and ai_analysis["ai_feedback"]:
             feedback_data = ai_analysis["ai_feedback"]
 
             if isinstance(feedback_data, dict) and "detailed_feedback" in feedback_data:
-                st.markdown("### 📝 Detailed Analysis")
+                st.markdown("### Detailed Analysis")
                 # Use st.markdown to properly render the markdown formatting
                 st.markdown(feedback_data["detailed_feedback"])
             elif isinstance(feedback_data, str):
-                st.markdown("### 📝 Detailed Analysis")
+                st.markdown("### Detailed Analysis")
                 st.markdown(feedback_data)
 
         # Improvement plan
         if "improvement_plan" in ai_analysis and ai_analysis["improvement_plan"]:
-            st.markdown("### 📋 Improvement Plan")
+            st.markdown("### Improvement Plan")
             for i, item in enumerate(ai_analysis["improvement_plan"][:8], 1):
                 st.markdown(f"**{i}.** {item}")
 
         # Next steps
         if "next_steps" in ai_analysis and ai_analysis["next_steps"]:
-            st.markdown("### 🚀 Immediate Next Steps")
+            st.markdown("### Immediate Next Steps")
             for i, step in enumerate(ai_analysis["next_steps"][:5], 1):
                 st.markdown(f"**{i}.** {step}")
 
     def render_visualizations_tab(self):
         """Render visualizations tab."""
-        st.header("📊 Analysis Visualizations")
+        st.header("Analysis Visualizations")
 
         if (
             not hasattr(st.session_state, "analysis_results")
             or not st.session_state.analysis_results
         ):
-            st.info("🔍 Run an analysis first to see visualizations here!")
+            st.info("Run an analysis first to see visualizations here!")
             return
 
         results = st.session_state.analysis_results
@@ -531,74 +488,47 @@ class EnhancedStreamlitApp:
             self.render_ai_visualizations(results["ai_analysis"])
         else:
             st.warning(
-                "🤖 AI analysis results not available. Please ensure AI analysis completed successfully."
+                "AI analysis results not available. Please ensure AI analysis completed successfully."
             )
 
     def render_ai_visualizations(self, ai_analysis):
         """Render AI analysis visualizations."""
-        st.subheader("🤖 AI Analysis Visualizations")
+        st.subheader("AI Analysis Visualizations")
 
-        # AI Score Breakdown
+        # Score gauge + component breakdown (shared with the visualizer module)
         if "ai_match_score" in ai_analysis:
             match_score = ai_analysis["ai_match_score"]
+            score_data = asdict(match_score)
 
-            # Create breakdown chart
-            breakdown_data = {
-                "Category": [
-                    "Technical Skills",
-                    "Experience",
-                    "Education",
-                    "Soft Skills",
-                    "ATS Score",
-                ],
-                "Score": [
-                    match_score.technical_skills_score,
-                    match_score.experience_score,
-                    match_score.education_score,
-                    match_score.soft_skills_score,
-                    match_score.ats_score,
-                ],
-            }
+            gauge = self.visualizer.create_score_gauge(match_score.overall_score, "Overall Match")
+            if gauge:
+                st.plotly_chart(gauge, use_container_width=True)
 
-            fig = px.bar(
-                breakdown_data,
-                x="Category",
-                y="Score",
-                title="AI Analysis Score Breakdown",
-                color="Score",
-                color_continuous_scale="viridis",
-            )
-            fig.update_layout(
-                showlegend=False,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="inherit"),
-                xaxis=dict(gridcolor="rgba(128,128,128,0.2)", color="inherit"),
-                yaxis=dict(gridcolor="rgba(128,128,128,0.2)", color="inherit"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            breakdown = self.visualizer.create_ai_score_breakdown(score_data)
+            if breakdown:
+                st.plotly_chart(breakdown, use_container_width=True)
 
     def render_rewrite_tab(self):
         """Render the resume rewrite tab."""
-        st.header("✏️ Rewrite Resume")
+        st.header("Rewrite Resume")
 
         if (
             not hasattr(st.session_state, "analysis_results")
             or not st.session_state.analysis_results
         ):
-            st.info("🔍 Run an analysis first to enable resume rewriting!")
+            st.info("Run an analysis first to enable resume rewriting!")
             return
 
         if not self.ai_available:
             st.error(
-                "❌ AI analysis is required for resume rewriting. Please configure your OpenRouter API key."
+                "AI analysis is required for resume rewriting. Please configure your OpenRouter API key."
             )
             return
 
         # Rewrite button
         if "rewrite_result" not in st.session_state:
-            if st.button("🔄 Rewrite Resume", type="primary"):
-                with st.spinner("🤖 Rewriting resume sections..."):
+            if st.button("Rewrite Resume", type="primary"):
+                with st.spinner("Rewriting resume sections..."):
                     try:
                         writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
                         result = writer.rewrite_resume(
@@ -609,13 +539,13 @@ class EnhancedStreamlitApp:
                         st.session_state.rewrite_result = result
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Rewrite failed: {str(e)}")
+                        st.error(f"Rewrite failed: {str(e)}")
             return
 
         # Show diff view
         result = st.session_state.rewrite_result
 
-        st.success(f"✅ Rewritten {len(result.sections)} sections!")
+        st.success(f"Rewritten {len(result.sections)} sections!")
         st.markdown(f"*{result.overall_explanation}*")
 
         st.markdown("---")
@@ -623,12 +553,12 @@ class EnhancedStreamlitApp:
         # Accept All / Reject All
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            if st.button("✅ Accept All"):
+            if st.button("Accept All"):
                 for section in result.sections:
                     section.accepted = True
                 st.rerun()
         with col2:
-            if st.button("❌ Reject All"):
+            if st.button("Reject All"):
                 for section in result.sections:
                     section.accepted = False
                 st.rerun()
@@ -637,7 +567,7 @@ class EnhancedStreamlitApp:
 
         # Section-by-section diff view
         for i, section in enumerate(result.sections):
-            with st.expander(f"📝 {section.section_name}", expanded=True):
+            with st.expander(f"{section.section_name}", expanded=True):
                 col1, col2 = st.columns(2)
 
                 with col1:
@@ -662,7 +592,7 @@ class EnhancedStreamlitApp:
                         label_visibility="collapsed",
                     )
 
-                st.markdown(f"💡 **Changes:** {section.explanation}")
+                st.markdown(f"**Changes:** {section.explanation}")
 
                 # Accept/reject toggle
                 section.accepted = st.checkbox(
@@ -671,10 +601,10 @@ class EnhancedStreamlitApp:
 
                 # Retry button for failed sections
                 if not section.accepted and "failed" in section.explanation.lower():
-                    if st.button(f"🔄 Retry {section.section_name}", key=f"retry_{i}"):
+                    if st.button(f"Retry {section.section_name}", key=f"retry_{i}"):
                         with st.spinner(f"Retrying {section.section_name}..."):
                             writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
-                            new_result = writer._rewrite_section(
+                            new_result = writer.rewrite_section(
                                 section.section_name,
                                 section.original_text,
                                 st.session_state.job_text,
@@ -687,7 +617,7 @@ class EnhancedStreamlitApp:
         st.markdown("---")
 
         # Generate final version
-        if st.button("📄 Generate Final Version", type="primary"):
+        if st.button("Generate Final Version", type="primary"):
             writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
             final_text = writer.generate_final_version(result.sections)
             st.session_state.final_resume_text = final_text
@@ -696,7 +626,7 @@ class EnhancedStreamlitApp:
         # Show final version and download buttons
         if "final_resume_text" in st.session_state:
             st.markdown("---")
-            st.subheader("📄 Final Resume")
+            st.subheader("Final Resume")
 
             st.text_area(
                 "Final Resume",
@@ -711,7 +641,7 @@ class EnhancedStreamlitApp:
             with col1:
                 # Download as TXT
                 st.download_button(
-                    label="📥 Download TXT",
+                    label="Download TXT",
                     data=st.session_state.final_resume_text,
                     file_name="improved_resume.txt",
                     mime="text/plain",
@@ -719,7 +649,7 @@ class EnhancedStreamlitApp:
 
             with col2:
                 # Generate and download as PDF/DOCX
-                if st.button("📥 Generate PDF & DOCX"):
+                if st.button("Generate PDF & DOCX"):
                     writer = ResumeWriter(ai_analyzer=self.ai_analyzer)
 
                     # Save to temp files
@@ -752,14 +682,14 @@ class EnhancedStreamlitApp:
                 col1, col2 = st.columns(2)
                 with col1:
                     st.download_button(
-                        label="📥 Download PDF",
+                        label="Download PDF",
                         data=st.session_state.pdf_data,
                         file_name="improved_resume.pdf",
                         mime="application/pdf",
                     )
                 with col2:
                     st.download_button(
-                        label="📥 Download DOCX",
+                        label="Download DOCX",
                         data=st.session_state.docx_data,
                         file_name="improved_resume.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -767,13 +697,13 @@ class EnhancedStreamlitApp:
 
     def render_results_tab(self):
         """Render results tab."""
-        st.header("💾 Analysis Results")
+        st.header("Analysis Results")
 
         if (
             not hasattr(st.session_state, "analysis_results")
             or not st.session_state.analysis_results
         ):
-            st.info("🔍 Run an analysis first to see results here!")
+            st.info("Run an analysis first to see results here!")
             return
 
         results = st.session_state.analysis_results
@@ -792,7 +722,7 @@ class EnhancedStreamlitApp:
             st.metric("Recommendations", f"{recommendations_count} items")
 
         # Download results
-        if st.button("📥 Download Results (JSON)"):
+        if st.button("Download Results (JSON)"):
             results_json = json.dumps(results, indent=2, default=str)
             st.download_button(
                 label="Download Analysis Results",
@@ -802,48 +732,44 @@ class EnhancedStreamlitApp:
             )
 
         # Raw results (collapsible)
-        with st.expander("🔍 View Raw Results"):
+        with st.expander("View Raw Results"):
             st.json(results)
 
     def extract_text_from_upload(self, uploaded_file) -> str:
-        """Extract text from uploaded file."""
+        """Extract text from an uploaded file using a unique, auto-cleaned temp file."""
+        suffix = Path(uploaded_file.name).suffix.lower()
         try:
-            # Save uploaded file temporarily
-            temp_path = f"temp_{uploaded_file.name}"
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-
-            # Extract text
-            text = self.text_extractor.extract_text(temp_path)
-
-            # Clean up temp file
-            os.remove(temp_path)
-
-            return text
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+                temp_path = temp_file.name
+                temp_file.write(uploaded_file.getbuffer())
+            return self.text_extractor.extract_text(temp_path)
         except Exception as e:
             st.error(f"Error extracting text: {str(e)}")
             return ""
+        finally:
+            if "temp_path" in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def perform_analysis(self):
         """Perform AI-powered analysis only."""
         if not hasattr(st.session_state, "resume_text") or not hasattr(
             st.session_state, "job_text"
         ):
-            st.error("❌ Please provide both resume and job description!")
+            st.error("Please provide both resume and job description!")
             return
 
         if not st.session_state.resume_text.strip() or not st.session_state.job_text.strip():
-            st.error("❌ Both resume and job description must contain text!")
+            st.error("Both resume and job description must contain text!")
             return
 
         # Check if AI is available
         if not self.ai_available:
             st.error(
-                "❌ AI analysis is required but unavailable. Please configure your OpenRouter API key."
+                "AI analysis is required but unavailable. Please configure your OpenRouter API key."
             )
             return
 
-        with st.status("🔄 Analyzing resume...", expanded=True) as status:
+        with st.status("Analyzing resume...", expanded=True) as status:
             try:
                 # Prepare context
                 context = {}
@@ -852,71 +778,31 @@ class EnhancedStreamlitApp:
                 if hasattr(st.session_state, "industry") and st.session_state.industry:
                     context["industry"] = st.session_state.industry
 
-                st.write("🤖 Running AI analysis...")
-                # AI analysis only
-                ai_results = self.perform_ai_analysis(
+                st.write("Running AI analysis...")
+                ai_analysis = self.ai_analyzer.analyze_resume_comprehensive(
                     st.session_state.resume_text, st.session_state.job_text, context
                 )
 
-                st.write("✨ Compiling results...")
-                # Store results
-                st.session_state.analysis_results = {
-                    "metadata": {"ai_enhanced": True, "context": context},
-                    "ai_analysis": ai_results,
-                    "summary": self.create_analysis_summary(ai_results),
-                }
+                st.write("Compiling results...")
+                st.session_state.analysis_results = build_results_dict(ai_analysis, context)
 
-                status.update(label="✅ Analysis complete!", state="complete")
+                status.update(label="Analysis complete!", state="complete")
 
             except Exception as e:
-                st.error(f"❌ Analysis failed: {str(e)}")
+                st.error(f"Analysis failed: {str(e)}")
                 st.error(f"Debug info: {traceback.format_exc()}")
 
-    def perform_ai_analysis(
-        self, resume_text: str, job_text: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Perform AI-powered analysis."""
-        try:
-            ai_analysis = self.ai_analyzer.analyze_resume_comprehensive(
-                resume_text, job_text, context
-            )
-
-            return {
-                "ai_match_score": ai_analysis.match_score,
-                "skill_gap_analysis": ai_analysis.skill_gap,
-                "salary_estimation": ai_analysis.salary_estimation,
-                "ats_optimization": ai_analysis.ats_optimization,
-                "ai_feedback": ai_analysis.detailed_feedback,
-                "improvement_plan": ai_analysis.improvement_plan,
-                "next_steps": ai_analysis.next_steps,
-            }
-        except Exception as e:
-            st.warning(f"AI analysis failed: {str(e)}")
-            return {"ai_error": str(e)}
-
-    def create_analysis_summary(self, ai_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Create analysis summary from AI results only."""
-        summary = {"recommendations": []}
-
-        if ai_results and "ai_match_score" in ai_results:
-            ai_score = ai_results["ai_match_score"]
-            summary["ai_overall_score"] = ai_score.overall_score
-            summary["ai_breakdown"] = {
-                "technical_skills": ai_score.technical_skills_score,
-                "experience": ai_score.experience_score,
-                "education": ai_score.education_score,
-                "soft_skills": ai_score.soft_skills_score,
-                "ats_compatibility": ai_score.ats_score,
-            }
-
-            if "improvement_plan" in ai_results:
-                summary["recommendations"].extend(ai_results["improvement_plan"])
-
-        return summary
-
     def clear_session_state(self):
-        """Clear analysis session state."""
-        keys_to_clear = ["resume_text", "job_text", "analysis_results"]
+        """Clear all analysis and rewrite state."""
+        keys_to_clear = [
+            "resume_text",
+            "job_text",
+            "analysis_results",
+            "rewrite_result",
+            "final_resume_text",
+            "pdf_data",
+            "docx_data",
+        ]
         for key in keys_to_clear:
             if key in st.session_state:
                 del st.session_state[key]

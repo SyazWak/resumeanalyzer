@@ -13,9 +13,10 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from utils.ai_analyzer import coerce_score
+
 try:
     import matplotlib.pyplot as plt
-    import seaborn as sns
 
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
@@ -70,11 +71,31 @@ class ReportVisualizer:
         self.color_palette = color_palette
         self.theme = theme
 
-        # Set up matplotlib if available
+        # Set up matplotlib if available (no seaborn dependency)
         if MATPLOTLIB_AVAILABLE:
-            plt.style.use("default")  # Use default since seaborn might not be available
-            if hasattr(sns, "set_palette"):
-                sns.set_palette(color_palette)
+            plt.style.use("default")
+
+    def streamlit_layout(
+        self, fig: Any, title: str = "", height: int = 400, y_range: Optional[List[float]] = None
+    ) -> Any:
+        """Make a Plotly figure readable in the active light/dark Streamlit theme."""
+        theme = self.get_theme_config()
+        font_color = theme["font_color"]
+        yaxis: Dict[str, Any] = {"gridcolor": theme["grid_color"], "color": font_color}
+        if y_range:
+            yaxis["range"] = y_range
+
+        fig.update_layout(
+            title=title,
+            height=height,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=font_color),
+            xaxis=dict(gridcolor=theme["grid_color"], color=font_color),
+            yaxis=yaxis,
+            legend=dict(font=dict(color=font_color)),
+        )
+        return fig
 
     def get_theme_config(self) -> Dict[str, Any]:
         """
@@ -127,37 +148,31 @@ class ReportVisualizer:
 
     def create_score_gauge(self, score: float, title: str = "Match Score") -> Optional[Any]:
         """
-        Create a gauge chart for the match score.
+        Create a gauge chart for a score expressed as a percentage (0-100).
 
-        Args:
-            score (float): Score between 0 and 1
-            title (str): Chart title
-
-        Returns:
-            Optional[Any]: Plotly figure object or None if not available
+        Returns None when Plotly is not available.
         """
         if not PLOTLY_AVAILABLE:
             return None
 
-        percentage = score * 100
-
-        # Determine color based on score
-        if percentage >= 80:
-            color = "green"
-        elif percentage >= 60:
-            color = "yellow"
-        elif percentage >= 40:
-            color = "orange"
-        else:
-            color = "red"
+        value = max(0.0, min(100.0, float(score)))
+        color = (
+            "green"
+            if value >= 80
+            else "yellow"
+            if value >= 60
+            else "orange"
+            if value >= 40
+            else "red"
+        )
 
         fig = go.Figure(
             go.Indicator(
                 mode="gauge+number+delta",
-                value=percentage,
+                value=value,
                 domain={"x": [0, 1], "y": [0, 1]},
                 title={"text": title},
-                delta={"reference": 70},  # Reference line at 70%
+                delta={"reference": 70},
                 gauge={
                     "axis": {"range": [None, 100]},
                     "bar": {"color": color},
@@ -176,9 +191,32 @@ class ReportVisualizer:
         )
 
         fig.update_layout(height=400, width=400)
-        # Apply theme styling
-        fig = self.apply_theme_layout(fig)
-        return fig
+        return self.streamlit_layout(fig)
+
+    def create_match_radar(
+        self, score_data: Dict[str, float], title: str = "Score Breakdown"
+    ) -> Optional[Any]:
+        """Create a radar chart of the five analysis score components."""
+        if not PLOTLY_AVAILABLE:
+            return None
+
+        categories = ["Technical Skills", "Experience", "Education", "Soft Skills", "ATS Score"]
+        keys = [
+            "technical_skills_score",
+            "experience_score",
+            "education_score",
+            "soft_skills_score",
+            "ats_score",
+        ]
+        values = [coerce_score(score_data.get(key)) for key in keys]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatterpolar(r=values, theta=categories, fill="toself", name="Your Score"))
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            showlegend=False,
+        )
+        return self.streamlit_layout(fig, title=title, height=400)
 
     def create_keyword_comparison(
         self, common_keywords: List[str], missing_keywords: List[str], max_display: int = 10
@@ -294,12 +332,12 @@ class ReportVisualizer:
         if not PLOTLY_AVAILABLE:
             return None
 
-        # Extract AI score components
-        technical = score_data.get("technical_skills_score", 0)
-        experience = score_data.get("experience_score", 0)
-        education = score_data.get("education_score", 0)
-        soft_skills = score_data.get("soft_skills_score", 0)
-        ats_score = score_data.get("ats_score", 0)
+        # Extract and normalise AI score components
+        technical = coerce_score(score_data.get("technical_skills_score"))
+        experience = coerce_score(score_data.get("experience_score"))
+        education = coerce_score(score_data.get("education_score"))
+        soft_skills = coerce_score(score_data.get("soft_skills_score"))
+        ats_score = coerce_score(score_data.get("ats_score"))
 
         fig = go.Figure(
             data=[
@@ -325,13 +363,8 @@ class ReportVisualizer:
             ]
         )
 
-        fig.update_layout(
-            title="AI Analysis Score Breakdown",
-            xaxis_title="Analysis Components",
-            yaxis_title="Score (%)",
-            height=400,
-        )
-
+        fig = self.streamlit_layout(fig, title="AI Analysis Score Breakdown", y_range=[0, 100])
+        fig.update_layout(xaxis_title="Analysis Components", yaxis_title="Score (%)")
         return fig
 
     def create_wordcloud(self, text: str, title: str = "Word Cloud") -> Optional[Any]:
@@ -478,7 +511,7 @@ class ReportVisualizer:
             st.metric("🔍 ATS Score", f"{ats_score:.1f}%")
 
         # AI Score gauge
-        gauge_fig = self.create_score_gauge(overall_score / 100, "AI Match Score")
+        gauge_fig = self.create_score_gauge(overall_score, "AI Match Score")
         if gauge_fig:
             st.plotly_chart(gauge_fig, use_container_width=True)
 

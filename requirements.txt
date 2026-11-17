@@ -22,3 +22,6 @@ python-dotenv>=1.0.0
 # PDF Generation
 fpdf2>=2.7.0
 
+# Optional: word clouds in utils/visualizer.py (the rest works without it)
+# wordcloud>=1.9.0
+
